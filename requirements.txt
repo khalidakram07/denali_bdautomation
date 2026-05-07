@@ -1,0 +1,31 @@
+# ─────────────────────────────────────────────────
+# Denali Health BD Automation — Python dependencies
+# Tested with Python 3.11
+# Install:  pip install -r requirements.txt
+# ─────────────────────────────────────────────────
+
+# ── Web framework ───────────────────────────────
+fastapi>=0.115.0
+uvicorn[standard]>=0.32.0
+
+# ── File uploads (Clinwire CSV ingest) ──────────
+python-multipart>=0.0.12
+
+# ── Data parsing ────────────────────────────────
+pandas>=2.2.0
+
+# ── HTTP client for Apollo + Instantly APIs ─────
+httpx>=0.27.0
+
+# ── AI — Anthropic direct (no LangChain) ────────
+anthropic>=0.39.0
+
+# ── Environment / config ────────────────────────
+python-dotenv>=1.0.1
+
+# ─────────────────────────────────────────────────
+# Notes:
+#   - sqlite3 is in Python's standard library — no install needed
+#   - pydantic comes in automatically as a FastAPI dependency
+#   - Add pytest / ruff / black later if you want dev tooling
+# ─────────────────────────────────────────────────
