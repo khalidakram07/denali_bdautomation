@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Denali Health — BD Automation</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Mono:wght@400;500&family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<!-- ── TOP BAR ─────────────────────────────────── -->
+<div class="topbar">
+  <div class="topbar-brand">
+    <div class="dot"></div>
+    Denali Health — BD Automation
+  </div>
+  <div class="topbar-meta">
+    <span id="liveBadge" class="live-badge">LIVE</span>
+    <span>Phase 1 MVP</span>
+  </div>
+</div>
+
+<!-- ── CONTROLS BAR ────────────────────────────── -->
+<div class="controls">
+  <div class="control-group">
+    <label for="csvFile">Upload CSV</label>
+    <input type="file" id="csvFile" accept=".csv">
+  </div>
+  <div class="control-group">
+    <label for="oppSelect">Opportunity</label>
+    <select id="oppSelect"><option value="">— none yet —</option></select>
+  </div>
+  <button id="seedBtn" class="btn btn-secondary hidden">Seed demo contacts</button>
+</div>
+
+<!-- ── EMPTY STATE (no opportunities yet) ─────── -->
+<div id="emptyState" class="empty hidden">
+  <h2>No opportunities yet</h2>
+  <p>Upload a Clinwire CSV to get started, or use the file picker above.</p>
+  <div class="hint">Tip: the parser is forgiving — common Clinwire export headers all work.</div>
+</div>
+
+<!-- ── MAIN SHELL ─────────────────────────────── -->
+<div id="mainShell" class="shell hidden">
+
+  <!-- LEFT COLUMN -->
+  <div class="left-col">
+
+    <!-- Opportunity panel -->
+    <div class="panel">
+      <div class="panel-header">
+        <div>
+          <div class="panel-label">Live Opportunity · Clinwire Feed</div>
+          <div class="panel-title">Trial opportunity</div>
+        </div>
+        <div id="oppDate" style="font-size:11px;color:#9ca3af;font-family:'DM Mono',monospace;"></div>
+      </div>
+      <div class="opp-body" id="oppBody">
+        <!-- filled by app.js -->
+      </div>
+    </div>
+
+    <!-- Contact panel -->
+    <div class="panel">
+      <div class="panel-header">
+        <div>
+          <div class="panel-label">Contact Intelligence · Scored</div>
+          <div class="panel-title">Recommended contact</div>
+        </div>
+        <div id="contactConfidence" style="font-size:11px;background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0;padding:3px 10px;border-radius:6px;font-family:'DM Mono',monospace;display:none;">HIGH CONFIDENCE</div>
+      </div>
+      <div class="contact-body" id="contactBody">
+        <!-- filled by app.js -->
+      </div>
+      <div id="contactListOther" class="contact-list-other hidden">
+        <!-- secondary contacts -->
+      </div>
+    </div>
+
+  </div>
+
+  <!-- RIGHT COLUMN -->
+  <div class="right-col">
+
+    <div class="panel" id="draftPanel">
+      <div class="panel-header">
+        <div>
+          <div class="panel-label">AI Engine · Draft Generator</div>
+          <div class="panel-title">Personalised email draft</div>
+        </div>
+        <div id="draftStatus" style="font-size:11px;color:#9ca3af;font-family:'DM Mono',monospace;">Not generated</div>
+      </div>
+
+      <!-- Pre-generate -->
+      <div id="preGenerate" style="padding:40px;text-align:center;">
+        <div style="font-size:15px;font-weight:600;color:var(--ink);margin-bottom:8px;">Ready to generate</div>
+        <div style="font-size:13px;color:var(--ink-soft);margin-bottom:24px;line-height:1.6;">The system will read the trial data, score the contact, and write a personalised first-touch email.</div>
+        <button id="generateBtn" class="btn btn-generate">
+          <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor"><path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z"/></svg>
+          Generate Personalised Email
+        </button>
+        <div id="generateError" class="text-error hidden"></div>
+      </div>
+
+      <!-- Loading -->
+      <div id="generatingState" class="generating hidden">
+        <div class="generating-icon"></div>
+        <div class="generating-text" id="generatingText">Reading trial data...</div>
+        <div class="generating-sub" id="generatingSubtext">Calling Claude</div>
+      </div>
+
+      <!-- Draft result -->
+      <div id="draftResult" class="draft-body hidden">
+        <div class="draft-field">
+          <div class="draft-field-label">Subject line</div>
+          <div class="subject-display" id="subjectDisplay"></div>
+          <input class="subject-edit hidden" id="subjectEdit" type="text" />
+        </div>
+        <div class="draft-field">
+          <div class="draft-field-label">Email body</div>
+          <div class="email-body-display" id="bodyDisplay"></div>
+          <textarea class="edit-area hidden" id="bodyEdit"></textarea>
+        </div>
+        <div class="draft-field">
+          <div class="draft-field-label">Quality flags &amp; signals</div>
+          <div class="quality-flags" id="qFlags"></div>
+        </div>
+      </div>
+
+      <!-- Approved -->
+      <div id="approvedState" class="hidden">
+        <div class="status-approved">
+          <h3>✓ Email Approved</h3>
+          <p>Queued for send · Activity logged</p>
+          <div style="margin-top:16px;font-size:12px;color:#15803d;font-family:'DM Mono',monospace;">
+            Approved by: <span id="approvedBy"></span> · <span id="approvedTime"></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Rejected -->
+      <div id="rejectedState" class="hidden">
+        <div class="status-rejected">
+          <h3>✕ Email Rejected</h3>
+          <p>Returned to queue · Reason logged</p>
+          <button class="btn btn-generate" style="margin-top:16px;" id="regenerateBtn">Re-generate Email</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Approval bar -->
+    <div class="approval-bar hidden" id="approvalBar">
+      <div style="flex:1;min-width:240px;">
+        <div class="approval-label">Your decision required</div>
+        <div class="approval-sub">Nothing sends without your approval · All actions are logged</div>
+        <div style="margin-top:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <span style="font-size:10px;font-family:'DM Mono',monospace;color:var(--ink-soft);text-transform:uppercase;letter-spacing:0.8px;">Send from:</span>
+          <select id="mailboxSelect" style="font-size:13px;padding:6px 10px;border:1px solid var(--rule);border-radius:6px;background:var(--white);font-family:inherit;cursor:pointer;max-width:300px;">
+            <option value="">— don't send, just approve —</option>
+          </select>
+        </div>
+      </div>
+      <div class="approval-actions">
+        <button class="btn btn-reject"  id="rejectBtn">✕ Reject</button>
+        <button class="btn btn-edit"    id="editBtn">✏ Edit</button>
+        <button class="btn btn-approve" id="approveBtn">✓ Approve &amp; Send</button>
+      </div>
+    </div>
+
+    <!-- Activity log -->
+    <div class="log-panel">
+      <div class="log-header">
+        <span class="log-title">Activity Log</span>
+        <span style="font-size:10px;color:#4b5563;font-family:'DM Mono',monospace;">Live · polling every 2s</span>
+      </div>
+      <div class="log-body" id="logBody"></div>
+    </div>
+
+  </div>
+</div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

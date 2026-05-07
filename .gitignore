@@ -88,3 +88,6 @@ desktop.ini
 .mypy_cache/
 .ruff_cache/
 .pyre/
+
+# Gmail mailbox config — contains app passwords, never commit
+mailboxes.json

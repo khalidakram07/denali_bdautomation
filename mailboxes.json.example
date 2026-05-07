@@ -1,0 +1,16 @@
+[
+  {
+    "email": "maryam@denalihealth.com",
+    "display_name": "Maryam (Primary)",
+    "smtp_host": "smtp.gmail.com",
+    "smtp_port": 587,
+    "app_password": "REPLACE_WITH_16_CHAR_APP_PASSWORD"
+  },
+  {
+    "email": "maryam.outreach@gmail.com",
+    "display_name": "Maryam (Outreach)",
+    "smtp_host": "smtp.gmail.com",
+    "smtp_port": 587,
+    "app_password": "REPLACE_WITH_16_CHAR_APP_PASSWORD"
+  }
+]

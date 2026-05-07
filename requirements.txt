@@ -23,6 +23,9 @@ anthropic>=0.39.0
 # ── Environment / config ────────────────────────
 python-dotenv>=1.0.1
 
+# ── Email address validation (used by Pydantic EmailStr) ─
+email-validator>=2.2.0
+
 # ─────────────────────────────────────────────────
 # Notes:
 #   - sqlite3 is in Python's standard library — no install needed

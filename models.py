@@ -173,6 +173,11 @@ class DraftApprove(BaseModel):
     approved_by: str = Field(min_length=1, description="Name of the rep approving")
     edited_body: Optional[str] = Field(default=None, description="If the rep edited before approving")
     edited_subject: Optional[str] = None
+    from_mailbox: Optional[str] = Field(
+        default=None,
+        description="Email of the Gmail mailbox to send from. Must exist in mailboxes.json. "
+                    "If omitted, the draft is approved but not sent.",
+    )
 
 
 class DraftReject(BaseModel):
@@ -228,6 +233,7 @@ class ActivityLogRead(BaseModel):
 class OpportunityWithContacts(OpportunityRead):
     """Used by GET /opportunities/{id} — bundles top-scored contacts inline."""
     contacts: list[ContactRead] = []
+
 
 
 class DraftWithContext(DraftRead):
