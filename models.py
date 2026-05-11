@@ -178,6 +178,12 @@ class DraftApprove(BaseModel):
         description="Email of the Gmail mailbox to send from. Must exist in mailboxes.json. "
                     "If omitted, the draft is approved but not sent.",
     )
+    to_email_override: Optional[EmailStr] = Field(
+        default=None,
+        description="Override the recipient address for this send only. "
+                    "Useful for testing or correcting Apollo-enriched emails. "
+                    "If omitted, uses the contact's stored email.",
+    )
 
 
 class DraftReject(BaseModel):
@@ -233,7 +239,6 @@ class ActivityLogRead(BaseModel):
 class OpportunityWithContacts(OpportunityRead):
     """Used by GET /opportunities/{id} — bundles top-scored contacts inline."""
     contacts: list[ContactRead] = []
-
 
 
 class DraftWithContext(DraftRead):

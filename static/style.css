@@ -170,3 +170,23 @@ body {
 
 .hidden { display: none !important; }
 .text-error { color: var(--red); font-size: 12px; margin-top: 6px; }
+
+/* ── SEND HISTORY ──────────────────────────────── */
+.send-row { padding: 12px 20px; border-bottom: 1px solid var(--rule); display: grid; grid-template-columns: 70px 1fr auto; gap: 12px; align-items: start; cursor: pointer; }
+.send-row:last-child { border-bottom: none; }
+.send-row:hover { background: var(--surface); }
+.send-time { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--ink-soft); }
+.send-main { min-width: 0; }
+.send-subject { font-size: 13px; font-weight: 600; color: var(--ink); margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.send-meta { font-size: 11px; color: var(--ink-soft); font-family: 'DM Mono', monospace; line-height: 1.5; word-break: break-word; }
+.send-meta .arrow { color: var(--teal-mid); font-weight: 600; margin: 0 6px; }
+.send-meta .override-tag { background: var(--amber-light); color: var(--amber); border: 1px solid #fed7aa; border-radius: 4px; padding: 1px 6px; font-size: 10px; margin-left: 6px; }
+.send-status-pill { font-size: 11px; padding: 2px 10px; border-radius: 12px; font-family: 'DM Mono', monospace; font-weight: 600; align-self: center; }
+.send-status-pill.sent     { background: var(--green-light); color: var(--green); border: 1px solid #bbf7d0; }
+.send-status-pill.failed   { background: var(--red-light);   color: var(--red);   border: 1px solid #fecaca; }
+.send-status-pill.bounced  { background: var(--red-light);   color: var(--red);   border: 1px solid #fecaca; }
+.send-status-pill.replied  { background: #eff6ff;            color: #1d4ed8;      border: 1px solid #bfdbfe; }
+.send-status-pill.queued   { background: var(--surface);     color: var(--ink-soft); border: 1px solid var(--rule); }
+.send-detail { padding: 12px 20px; background: var(--surface); border-bottom: 1px solid var(--rule); font-family: 'DM Mono', monospace; font-size: 11px; color: var(--ink-mid); line-height: 1.7; word-break: break-word; }
+.send-detail .label { color: var(--ink-soft); display: inline-block; width: 110px; }
+.send-detail .body-block { white-space: pre-wrap; background: var(--white); border: 1px solid var(--rule); border-radius: 6px; padding: 10px; margin-top: 8px; font-family: 'Instrument Sans', sans-serif; font-size: 12px; color: var(--ink-mid); line-height: 1.6; }

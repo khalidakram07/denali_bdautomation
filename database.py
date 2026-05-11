@@ -160,13 +160,16 @@ CREATE INDEX IF NOT EXISTS idx_drafts_status      ON email_drafts(approval_statu
 
 
 -- ── email_sends ──────────────────────────────────────────────
--- One row per actual send attempt to Instantly.
+-- One row per actual send attempt (Gmail SMTP, Instantly, etc.).
 -- A draft can have multiple sends (e.g., retries) but usually just one.
 CREATE TABLE IF NOT EXISTS email_sends (
-    id            INTEGER PRIMARY KEY AUTOINCREMENT,
-    draft_id      INTEGER NOT NULL,
-    sent_at       TIMESTAMP,
-    message_id    TEXT,                                  -- ID returned by Instantly
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    draft_id            INTEGER NOT NULL,
+    recipient_email     TEXT,                            -- actual To: address used (may differ from contact.email if overridden)
+    from_mailbox_email  TEXT,                            -- which mailbox sent it
+    is_to_overridden    INTEGER NOT NULL DEFAULT 0,      -- 1 if recipient differs from contact.email
+    sent_at             TIMESTAMP,
+    message_id          TEXT,                            -- Message-ID returned by Gmail SMTP / Instantly
     send_status   TEXT NOT NULL DEFAULT 'queued'
                   CHECK (send_status IN ('queued', 'sent', 'failed', 'bounced', 'replied')),
     bounce_type   TEXT,                                  -- 'hard' | 'soft' | NULL
@@ -210,6 +213,21 @@ def init_db() -> None:
     with db_cursor() as cur:
         cur.executescript(SCHEMA)
 
+        # ── Non-destructive migrations for older databases ───────────
+        # Each ALTER is idempotent: if the column already exists we
+        # silently skip; any other error re-raises.
+        migrations = [
+            "ALTER TABLE email_sends ADD COLUMN recipient_email     TEXT",
+            "ALTER TABLE email_sends ADD COLUMN from_mailbox_email  TEXT",
+            "ALTER TABLE email_sends ADD COLUMN is_to_overridden    INTEGER NOT NULL DEFAULT 0",
+        ]
+        for stmt in migrations:
+            try:
+                cur.execute(stmt)
+            except sqlite3.OperationalError as e:
+                if "duplicate column name" not in str(e).lower():
+                    raise
+
 
 def log_activity(
     entity_type: str,
@@ -221,7 +239,7 @@ def log_activity(
 ) -> None:
     """
     Insert one row into activity_log. Use this from every service/router
-    whenever something interesting happens — that feed is the UI's heartbeat.
+    whenever something interesting happens - that feed is the UI's heartbeat.
 
     Example:
         log_activity('draft', draft_id, 'approved',
@@ -245,9 +263,9 @@ def log_activity(
         )
 
 
-# ─────────────────────────────────────────────────────────────
+# -------------------------------------------------------------
 # CLI entry-point
-# ─────────────────────────────────────────────────────────────
+# -------------------------------------------------------------
 
 if __name__ == "__main__":
     init_db()

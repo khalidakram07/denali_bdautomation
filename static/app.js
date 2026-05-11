@@ -177,9 +177,12 @@ function renderContact(c) {
   if (!c) {
     $('contactBody').innerHTML = '';
     $('contactConfidence').style.display = 'none';
+    $('toEmailInput').value = '';
     return;
   }
   $('contactConfidence').style.display = '';
+  // Pre-fill the "To:" override field with the contact's stored email
+  $('toEmailInput').value = c.email || '';
   const sr = c.score_reasoning || {};
   const initials = ((c.first_name || '?')[0] + (c.last_name || '?')[0]).toUpperCase();
   const score = c.contact_score ?? 0;
@@ -404,6 +407,73 @@ function onToggleEdit() {
   }
 }
 
+// ── Send history ─────────────────────────────────
+async function loadSendHistory() {
+  try {
+    const data = await API.get('/api/campaigns/sent-history?limit=50');
+    renderSendHistory(data.sends || []);
+  } catch (err) {
+    console.warn('send-history load failed:', err);
+  }
+}
+
+function renderSendHistory(sends) {
+  const body = $('sendHistoryBody');
+  if (!sends || sends.length === 0) {
+    body.innerHTML = '<div style="padding:20px;text-align:center;color:var(--ink-soft);font-size:13px;">No emails sent yet — approve a draft with a mailbox selected to see it here.</div>';
+    return;
+  }
+  body.innerHTML = sends.map(s => {
+    const t = s.sent_at ? new Date(s.sent_at).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : '—';
+    const date = s.sent_at ? new Date(s.sent_at).toLocaleDateString([], {month:'short', day:'numeric'}) : '';
+    const overrideTag = s.is_to_overridden ? '<span class="override-tag">TO OVERRIDDEN</span>' : '';
+    return `
+      <div class="send-row" data-send-id="${s.send_id}">
+        <div class="send-time">${escapeHtml(t)}<br><span style="opacity:0.7;font-size:10px;">${escapeHtml(date)}</span></div>
+        <div class="send-main">
+          <div class="send-subject">${escapeHtml(s.subject || '(no subject)')}</div>
+          <div class="send-meta">
+            ${escapeHtml(s.from_mailbox_email || '?')}<span class="arrow">→</span>${escapeHtml(s.recipient_email || '?')}${overrideTag}
+            <br>
+            <span style="opacity:0.7;">${escapeHtml(s.opportunity_title || '')}  ·  ${escapeHtml(s.contact_name || '')}</span>
+          </div>
+        </div>
+        <div class="send-status-pill ${escapeHtml(s.send_status || 'queued')}">${escapeHtml((s.send_status || 'queued').toUpperCase())}</div>
+      </div>
+    `;
+  }).join('');
+
+  // Wire row clicks → expand a detail panel inline
+  body.querySelectorAll('.send-row').forEach(row => {
+    row.addEventListener('click', () => {
+      const sendId = parseInt(row.dataset.sendId, 10);
+      const send = sends.find(s => s.send_id === sendId);
+      if (!send) return;
+      // Toggle existing detail panel
+      const next = row.nextElementSibling;
+      if (next && next.classList.contains('send-detail')) {
+        next.remove();
+        return;
+      }
+      const det = document.createElement('div');
+      det.className = 'send-detail';
+      det.innerHTML = `
+        <div><span class="label">Send ID:</span> #${send.send_id} (draft #${send.draft_id})</div>
+        <div><span class="label">From:</span> ${escapeHtml(send.from_mailbox_email || '')}</div>
+        <div><span class="label">To:</span> ${escapeHtml(send.recipient_email || '')}${send.is_to_overridden ? ' <span class="override-tag">override of stored '+escapeHtml(send.contact_stored_email||'')+'</span>' : ''}</div>
+        <div><span class="label">Subject:</span> ${escapeHtml(send.subject || '')}</div>
+        <div><span class="label">Sent at:</span> ${escapeHtml(send.sent_at || '—')}</div>
+        <div><span class="label">Approved by:</span> ${escapeHtml(send.approved_by || '—')} ${send.approved_at ? '· ' + escapeHtml(send.approved_at) : ''}</div>
+        <div><span class="label">Message-ID:</span> ${escapeHtml(send.message_id || '—')}</div>
+        <div><span class="label">Opportunity:</span> ${escapeHtml(send.opportunity_title || '')}</div>
+        <div><span class="label">Contact:</span> ${escapeHtml(send.contact_name || '')} (${escapeHtml(send.contact_title || '')})</div>
+        <div class="body-block">${escapeHtml(send.body || '')}</div>
+      `;
+      row.parentNode.insertBefore(det, row.nextSibling);
+    });
+  });
+}
+
 async function loadMailboxes() {
   try {
     const data = await API.get('/api/campaigns/mailboxes');
@@ -432,10 +502,18 @@ async function onApprove() {
   const fromMailbox = $('mailboxSelect').value || null;
   const editedSubject = $('subjectEdit').value !== state.draft.subject_line ? $('subjectEdit').value : null;
   const editedBody    = $('bodyEdit').value    !== state.draft.body_text    ? $('bodyEdit').value    : null;
+
+  // Resolve the recipient. If the user changed it from the contact's stored email,
+  // pass it as an override (single send only — doesn't update the contact record).
+  const enteredTo  = $('toEmailInput').value.trim();
+  const storedTo   = (state.primaryContact && state.primaryContact.email) || '';
+  const toOverride = (enteredTo && enteredTo.toLowerCase() !== storedTo.toLowerCase()) ? enteredTo : null;
+
   try {
     const res = await API.post(`/api/drafts/${state.draft.id}/approve`, {
       approved_by: approver,
       from_mailbox: fromMailbox,
+      to_email_override: toOverride,
       edited_subject: editedSubject,
       edited_body: editedBody,
     });
@@ -449,7 +527,9 @@ async function onApprove() {
     $('draftStatus').textContent = send ? (send.dry_run ? 'Approved (dry-run send)' : 'Approved & sent') : 'Approved';
     if (send) {
       const mode = send.dry_run ? 'DRY-RUN' : 'SENT';
-      logEntry(`${mode}: ${send.sent_via} → ${send.to}  msg-id=${send.message_id}`, 'ok');
+      const overrideTag = send.to_overridden ? ' [TO OVERRIDDEN]' : '';
+      logEntry(`${mode}: ${send.sent_via} → ${send.to}${overrideTag}  msg-id=${send.message_id}`, 'ok');
+      loadSendHistory();   // refresh the history panel so the new row shows up
     } else {
       logEntry('Draft approved (no mailbox selected — not sent)', 'sys');
     }
@@ -488,9 +568,12 @@ window.addEventListener('DOMContentLoaded', async () => {
   $('rejectBtn').addEventListener('click', onReject);
   $('regenerateBtn').addEventListener('click', () => { resetDraftView(); onGenerate(); });
 
+  $('refreshHistoryBtn').addEventListener('click', loadSendHistory);
+
   logEntry('Session started', 'sys');
   await loadMailboxes();
   await refreshOpportunityList();
+  await loadSendHistory();
   await pollLog();
   state.logPollInterval = setInterval(pollLog, 2000);
 });

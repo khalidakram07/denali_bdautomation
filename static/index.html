@@ -154,11 +154,14 @@
       <div style="flex:1;min-width:240px;">
         <div class="approval-label">Your decision required</div>
         <div class="approval-sub">Nothing sends without your approval · All actions are logged</div>
-        <div style="margin-top:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+        <div style="margin-top:10px;display:grid;grid-template-columns:auto 1fr;gap:6px 10px;align-items:center;max-width:480px;">
           <span style="font-size:10px;font-family:'DM Mono',monospace;color:var(--ink-soft);text-transform:uppercase;letter-spacing:0.8px;">Send from:</span>
-          <select id="mailboxSelect" style="font-size:13px;padding:6px 10px;border:1px solid var(--rule);border-radius:6px;background:var(--white);font-family:inherit;cursor:pointer;max-width:300px;">
+          <select id="mailboxSelect" style="font-size:13px;padding:6px 10px;border:1px solid var(--rule);border-radius:6px;background:var(--white);font-family:inherit;cursor:pointer;">
             <option value="">— don't send, just approve —</option>
           </select>
+
+          <span style="font-size:10px;font-family:'DM Mono',monospace;color:var(--ink-soft);text-transform:uppercase;letter-spacing:0.8px;">Send to:</span>
+          <input id="toEmailInput" type="email" placeholder="recipient@example.com" style="font-size:13px;padding:6px 10px;border:1px solid var(--rule);border-radius:6px;background:var(--white);font-family:'DM Mono',monospace;outline:none;" />
         </div>
       </div>
       <div class="approval-actions">
@@ -175,6 +178,22 @@
         <span style="font-size:10px;color:#4b5563;font-family:'DM Mono',monospace;">Live · polling every 2s</span>
       </div>
       <div class="log-body" id="logBody"></div>
+    </div>
+
+    <!-- Send history -->
+    <div class="panel" id="sendHistoryPanel">
+      <div class="panel-header">
+        <div>
+          <div class="panel-label">Sent Emails · History</div>
+          <div class="panel-title">Send history</div>
+        </div>
+        <button id="refreshHistoryBtn" class="btn btn-secondary" style="padding:6px 12px;font-size:12px;">↻ Refresh</button>
+      </div>
+      <div id="sendHistoryBody" style="max-height:360px;overflow-y:auto;">
+        <div style="padding:20px;text-align:center;color:var(--ink-soft);font-size:13px;" id="sendHistoryEmpty">
+          No emails sent yet — approve a draft with a mailbox selected to see it here.
+        </div>
+      </div>
     </div>
 
   </div>

@@ -111,10 +111,68 @@ def list_mailboxes():
     """
     Returns the Gmail mailboxes configured in mailboxes.json.
     Passwords are NEVER included in this response.
-
-    Each item:
-      - email:        the Gmail address
-      - display_name: human-readable label for the dropdown
-      - ready:        false if app_password is missing/placeholder (dry-run only)
     """
     return {"mailboxes": list_mailboxes_public()}
+
+
+@router.get("/sent-history")
+def sent_history(
+    limit: int = Query(50, ge=1, le=500),
+    mailbox: Optional[str] = Query(None, description="Filter to one sender mailbox"),
+    send_status: Optional[SendStatus] = Query(None, alias="status"),
+):
+    """
+    Rich send history - joins sends -> drafts -> contacts -> opportunities so the
+    UI gets everything it needs in one call: time, from, to, subject, opportunity,
+    contact, status, override flag, message-id, approver.
+    """
+    sql = """
+        SELECT
+            s.id                     AS send_id,
+            s.draft_id,
+            s.recipient_email,
+            s.from_mailbox_email,
+            s.is_to_overridden,
+            s.sent_at,
+            s.message_id,
+            s.send_status,
+            s.bounce_type,
+            s.replied_at,
+            d.subject_line           AS subject,
+            d.body_text              AS body,
+            d.approved_by,
+            d.approved_at,
+            d.opportunity_id,
+            o.trial_title            AS opportunity_title,
+            d.contact_id,
+            c.first_name || ' ' || c.last_name AS contact_name,
+            c.email                  AS contact_stored_email,
+            c.title                  AS contact_title
+        FROM email_sends s
+        JOIN email_drafts  d ON d.id = s.draft_id
+        JOIN opportunities o ON o.id = d.opportunity_id
+        JOIN contacts      c ON c.id = d.contact_id
+    """
+    params: list = []
+    where = []
+    if mailbox:
+        where.append("s.from_mailbox_email = ?")
+        params.append(mailbox)
+    if send_status:
+        where.append("s.send_status = ?")
+        params.append(send_status)
+    if where:
+        sql += " WHERE " + " AND ".join(where)
+    sql += " ORDER BY s.id DESC LIMIT ?"
+    params.append(limit)
+
+    with db_cursor() as cur:
+        cur.execute(sql, params)
+        rows = cur.fetchall()
+
+    out = []
+    for r in rows:
+        d = dict(r)
+        d["is_to_overridden"] = bool(d.get("is_to_overridden"))
+        out.append(d)
+    return {"sends": out, "count": len(out)}

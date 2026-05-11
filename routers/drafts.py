@@ -233,8 +233,10 @@ def approve_draft(draft_id: int, body: DraftApprove):
     # 4. Send the email if a mailbox was chosen
     send_info = None
     if chosen_mb:
-        if not draft_data.get("contact_email"):
-            raise HTTPException(400, "Contact has no email address — cannot send.")
+        # Resolve recipient: override first, else contact's stored email
+        final_to = (body.to_email_override or draft_data.get("contact_email") or "").strip()
+        if not final_to:
+            raise HTTPException(400, "No recipient address — set one on the contact or pass to_email_override.")
 
         final_subject = body.edited_subject or draft_data["subject_line"]
         final_body    = body.edited_body    or draft_data["body_text"]
@@ -243,7 +245,7 @@ def approve_draft(draft_id: int, body: DraftApprove):
         try:
             result = send_email(
                 from_mailbox_email = body.from_mailbox,
-                to_email           = draft_data["contact_email"],
+                to_email           = final_to,
                 subject            = final_subject,
                 body_text          = final_body,
                 sender_display_name = sender_display,
@@ -270,14 +272,18 @@ def approve_draft(draft_id: int, body: DraftApprove):
         with db_cursor() as cur:
             cur.execute(
                 """
-                INSERT INTO email_sends (draft_id, sent_at, message_id, send_status)
-                VALUES (?, ?, ?, ?)
+                INSERT INTO email_sends
+                    (draft_id, recipient_email, from_mailbox_email, is_to_overridden,
+                     sent_at, message_id, send_status)
+                VALUES (?, ?, ?, ?, ?, ?, 'sent')
                 """,
                 (
                     draft_id,
+                    final_to,
+                    result.sent_via,
+                    1 if body.to_email_override else 0,
                     datetime.utcnow().isoformat(timespec="seconds"),
                     result.message_id,
-                    "sent",
                 ),
             )
             send_id = cur.lastrowid
@@ -291,9 +297,10 @@ def approve_draft(draft_id: int, body: DraftApprove):
             "send", send_id, "sent",
             actor_type="system",
             metadata={
-                "mailbox": result.sent_via,
-                "to":      draft_data["contact_email"],
-                "dry_run": result.dry_run,
+                "mailbox":    result.sent_via,
+                "to":         final_to,
+                "to_overridden": bool(body.to_email_override),
+                "dry_run":    result.dry_run,
                 "message_id": result.message_id,
             },
         )
@@ -303,7 +310,8 @@ def approve_draft(draft_id: int, body: DraftApprove):
             "message_id": result.message_id,
             "sent_via":   result.sent_via,
             "dry_run":    result.dry_run,
-            "to":         draft_data["contact_email"],
+            "to":         final_to,
+            "to_overridden": bool(body.to_email_override),
         }
 
     # 6. Return the updated draft + send info
