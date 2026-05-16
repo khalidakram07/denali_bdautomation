@@ -1,8 +1,8 @@
 """
-services/email_sender.py — Gmail SMTP sender.
+services/email_sender.py - Gmail SMTP sender.
 
-Reads `mailboxes.json` at the project root. Each entry is one Gmail account
-that Maryam can send from. The frontend shows a dropdown of these.
+In dev: reads mailboxes.json at the project root.
+In production: reads the MAILBOXES_JSON env var (same JSON array format).
 
 How to add a real Gmail account:
   1. The account must have 2-Step Verification turned on.
@@ -11,13 +11,14 @@ How to add a real Gmail account:
   3. Paste the 16-char password into mailboxes.json under "app_password".
 
 Dry-run mode:
-  If `app_password` is missing or starts with "REPLACE", the send is faked —
-  we log a warning and return a fake message-id. This lets the demo flow
-  work end-to-end before real credentials are wired in.
+  If `app_password` is missing or starts with "REPLACE", the send is faked -
+  we log a warning and return a fake message-id. Lets the demo flow work
+  end-to-end without real credentials.
 """
 
 import json
 import logging
+import os
 import smtplib
 import ssl
 import uuid
@@ -37,9 +38,30 @@ def _is_dry_run(mailbox: dict) -> bool:
 
 
 def load_mailboxes() -> list[dict]:
-    """Read mailboxes.json. Returns [] if the file is missing."""
+    """
+    Load mailbox configs. Two sources, in order:
+
+    1. MAILBOXES_JSON env var (production / Render) - so we don't ship
+       app passwords in the repo. Same JSON array structure as the file.
+    2. mailboxes.json on disk (local dev).
+
+    Returns [] if neither source yields a valid list.
+    """
+    # Source 1: env var (production)
+    env_json = os.getenv("MAILBOXES_JSON", "").strip()
+    if env_json:
+        try:
+            data = json.loads(env_json)
+            if isinstance(data, list):
+                return data
+            log.error("MAILBOXES_JSON env var must be a JSON array")
+        except json.JSONDecodeError as e:
+            log.error("MAILBOXES_JSON env var is invalid JSON: %s", e)
+        return []
+
+    # Source 2: file (local dev)
     if not CONFIG_PATH.exists():
-        log.warning("mailboxes.json not found at %s — no mailboxes configured", CONFIG_PATH)
+        log.warning("mailboxes.json not found at %s - no mailboxes configured", CONFIG_PATH)
         return []
     try:
         data = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
@@ -55,7 +77,7 @@ def load_mailboxes() -> list[dict]:
 def list_mailboxes_public() -> list[dict]:
     """
     Returns mailbox info safe to expose to the frontend (no passwords).
-    Each item: {email, display_name, ready (bool — false if dry-run/missing pw)}
+    Each item: {email, display_name, ready (bool - false if dry-run/missing pw)}
     """
     out = []
     for m in load_mailboxes():
@@ -75,15 +97,15 @@ def find_mailbox(email: str) -> Optional[dict]:
     return None
 
 
-# ─────────────────────────────────────────────────────────────
+# -------------------------------------------------------------
 # Send
-# ─────────────────────────────────────────────────────────────
+# -------------------------------------------------------------
 
 class SendResult:
     def __init__(self, message_id: str, dry_run: bool, sent_via: str):
         self.message_id = message_id
         self.dry_run    = dry_run
-        self.sent_via   = sent_via   # the From address actually used
+        self.sent_via   = sent_via
 
 
 def send_email(
@@ -102,7 +124,7 @@ def send_email(
     """
     mb = find_mailbox(from_mailbox_email)
     if not mb:
-        raise ValueError(f"Mailbox '{from_mailbox_email}' is not in mailboxes.json")
+        raise ValueError(f"Mailbox '{from_mailbox_email}' is not configured")
 
     if not to_email:
         raise ValueError("Cannot send: contact has no email address")
@@ -111,16 +133,14 @@ def send_email(
     message_id = make_msgid(domain=mb["email"].split("@")[-1])
 
     if _is_dry_run(mb):
-        # Demo path — pretend we sent
         fake_id = f"<dryrun-{uuid.uuid4()}@denali.local>"
         log.warning(
             "DRY-RUN send: would have emailed %s from %s (subject=%r). "
-            "Set a real app_password in mailboxes.json to actually send.",
+            "Set a real app_password to actually send.",
             to_email, mb["email"], subject[:60],
         )
         return SendResult(message_id=fake_id, dry_run=True, sent_via=mb["email"])
 
-    # Build the MIME message
     msg = EmailMessage()
     msg["From"]       = formataddr((display, mb["email"]))
     msg["To"]         = to_email
@@ -133,7 +153,7 @@ def send_email(
     host = mb.get("smtp_host", "smtp.gmail.com")
     port = int(mb.get("smtp_port", 587))
 
-    log.info("Sending email via %s:%d as %s -> %s", host, port, mb["email"], to_email)
+    log.info("Sending via %s:%d as %s -> %s", host, port, mb["email"], to_email)
 
     context = ssl.create_default_context()
     with smtplib.SMTP(host, port, timeout=30) as server:

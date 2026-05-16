@@ -95,7 +95,15 @@
       <!-- Pre-generate -->
       <div id="preGenerate" style="padding:40px;text-align:center;">
         <div style="font-size:15px;font-weight:600;color:var(--ink);margin-bottom:8px;">Ready to generate</div>
-        <div style="font-size:13px;color:var(--ink-soft);margin-bottom:24px;line-height:1.6;">The system will read the trial data, score the contact, and write a personalised first-touch email.</div>
+        <div style="font-size:13px;color:var(--ink-soft);margin-bottom:20px;line-height:1.6;">The system will read the trial data, score the contact, and write a personalised first-touch email.</div>
+
+        <div style="display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:20px;flex-wrap:wrap;">
+          <span style="font-size:10px;font-family:'DM Mono',monospace;color:var(--ink-soft);text-transform:uppercase;letter-spacing:0.8px;">Template:</span>
+          <select id="templateSelect" style="font-size:13px;padding:6px 12px;border:1px solid var(--rule);border-radius:6px;background:var(--white);font-family:inherit;cursor:pointer;min-width:240px;">
+            <option value="">— None (pure AI generation) —</option>
+          </select>
+        </div>
+
         <button id="generateBtn" class="btn btn-generate">
           <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor"><path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z"/></svg>
           Generate Personalised Email

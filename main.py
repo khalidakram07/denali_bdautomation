@@ -25,6 +25,7 @@ from fastapi.staticfiles import StaticFiles
 
 from database import init_db
 from routers import campaigns, contacts, drafts, opportunities
+from services.auth import BasicAuthMiddleware
 
 # ── Config ──────────────────────────────────────
 load_dotenv()
@@ -32,6 +33,10 @@ APP_ENV  = os.getenv("APP_ENV", "development")
 APP_HOST = os.getenv("APP_HOST", "127.0.0.1")
 APP_PORT = int(os.getenv("APP_PORT", "8000"))
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
+
+# Comma-separated list of origins allowed for CORS (production lock-down).
+# Empty / unset = wildcard in dev; required in production.
+ALLOWED_ORIGINS = [o.strip() for o in os.getenv("ALLOWED_ORIGINS", "").split(",") if o.strip()]
 
 logging.basicConfig(
     level=LOG_LEVEL,
@@ -62,10 +67,17 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS — wide open in dev, locked down in prod
+# Basic auth — enforced whenever APP_PASSWORD is set (no-op otherwise)
+app.add_middleware(BasicAuthMiddleware)
+
+# CORS — wide open in dev, locked to ALLOWED_ORIGINS in prod
+if APP_ENV == "development":
+    cors_origins = ["*"]
+else:
+    cors_origins = ALLOWED_ORIGINS or []   # explicit empty = block all cross-origin
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"] if APP_ENV == "development" else [],
+    allow_origins=cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -89,6 +101,8 @@ def health():
 STATIC_DIR = Path(__file__).parent / "static"
 if STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+    
 
     @app.get("/", include_in_schema=False)
     def index():

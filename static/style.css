@@ -168,6 +168,22 @@ body {
 .log-entry .ev.sys  { color: #60a5fa; }
 .log-entry .ev.err  { color: #f87171; }
 
+/* ── RAW DATA VIEWER (collapsible) ─────────────── */
+.raw-data { margin-top: 16px; border-top: 1px dashed var(--rule); padding-top: 14px; }
+.raw-data-toggle { cursor: pointer; font-size: 11px; font-family: 'DM Mono', monospace; color: var(--ink-soft); text-transform: uppercase; letter-spacing: 0.8px; display: flex; align-items: center; gap: 6px; user-select: none; }
+.raw-data-toggle:hover { color: var(--ink-mid); }
+.raw-data-toggle .arrow { transition: transform 0.2s; }
+.raw-data.open .raw-data-toggle .arrow { transform: rotate(90deg); }
+.raw-data-body { display: none; margin-top: 10px; }
+.raw-data.open .raw-data-body { display: block; }
+.raw-row { padding: 6px 0; border-bottom: 1px solid var(--rule); font-size: 11px; font-family: 'DM Mono', monospace; }
+.raw-row:last-child { border-bottom: none; }
+.raw-row .key { color: var(--ink-soft); display: block; margin-bottom: 2px; text-transform: uppercase; letter-spacing: 0.5px; font-size: 10px; }
+.raw-row .val { color: var(--ink-mid); word-break: break-word; white-space: pre-wrap; line-height: 1.5; }
+.raw-row .val.fulltext { display: block; max-height: 240px; overflow-y: auto; background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; padding: 10px; margin-top: 4px; font-family: 'Instrument Sans', sans-serif; font-size: 12px; color: var(--ink-mid); }
+.raw-row .val a { color: var(--teal); text-decoration: none; word-break: break-all; }
+.raw-row .val a:hover { text-decoration: underline; }
+
 .hidden { display: none !important; }
 .text-error { color: var(--red); font-size: 12px; margin-top: 6px; }
 

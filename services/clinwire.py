@@ -23,15 +23,20 @@ from models import OpportunityCreate
 
 log = logging.getLogger(__name__)
 
-# Canonical field → list of accepted header variants (will be matched lowercased).
+# Canonical field → list of accepted header variants (matched case-insensitively).
+# Supports BOTH the original Clinwire export format AND the "extraction agent"
+# format (Title / Company / Conditions / Drugs / Trial IDs / Event ID / Full Text).
 COLUMN_MAP: dict[str, list[str]] = {
-    "nct_number":       ["nct number", "nct id", "nct", "nctid", "clinicaltrials.gov id"],
+    # "nct_number" is used as the dedup key. For the agent output, this is the
+    # Clinwire "Trial IDs" (e.g. ZWPSAAFFC29B) — not a real NCT, but unique per trial.
+    "nct_number":       ["nct number", "nct id", "nct", "nctid", "clinicaltrials.gov id",
+                         "trial ids", "trial id", "clinwire id"],
     "trial_title":      ["trial title", "study title", "title", "official title", "brief title"],
-    "sponsor_name":     ["sponsor", "sponsor name", "lead sponsor"],
+    "sponsor_name":     ["sponsor", "sponsor name", "lead sponsor", "company"],
     "cro_name":         ["cro", "cro name", "contract research organization", "cro (european arm)"],
     "therapeutic_area": ["therapeutic area", "ta", "therapy area"],
     "phase":            ["phase", "trial phase", "study phase"],
-    "indication":       ["indication", "condition", "disease"],
+    "indication":       ["indication", "condition", "disease", "conditions"],
     "sites_needed":     ["sites needed", "site count", "number of sites", "n sites", "sites"],
     "geography":        ["geography", "regions", "countries", "location", "geo"],
     "protocol_start":   ["protocol start", "start date", "estimated start date", "study start"],

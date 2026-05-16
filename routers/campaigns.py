@@ -17,6 +17,7 @@ from fastapi import APIRouter, Query
 from database import db_cursor
 from models import ActivityLogRead, EmailSendRead, SendStatus
 from services.email_sender import list_mailboxes_public
+from services.template_engine import list_templates
 
 log = logging.getLogger(__name__)
 router = APIRouter()
@@ -113,6 +114,15 @@ def list_mailboxes():
     Passwords are NEVER included in this response.
     """
     return {"mailboxes": list_mailboxes_public()}
+
+
+@router.get("/templates")
+def list_email_templates():
+    """
+    Returns the .docx email templates in templates/.
+    Used by the UI to populate the template dropdown in the generate step.
+    """
+    return {"templates": list_templates()}
 
 
 @router.get("/sent-history")

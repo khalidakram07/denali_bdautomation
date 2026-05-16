@@ -197,6 +197,12 @@ class DraftGenerateRequest(BaseModel):
     opportunity_id: int
     contact_id:     int
     sequence_step:  int = Field(default=1, ge=1, le=4)
+    template_filename: Optional[str] = Field(
+        default=None,
+        description="Filename of a .docx in templates/. If set, AI fills in the template's "
+                    "[BRACKETED] instructions using the Clinwire Full Text as context. "
+                    "If omitted, uses the default prompt-only generation.",
+    )
 
 
 # ─────────────────────────────────────────────────────────────
@@ -238,12 +244,12 @@ class ActivityLogRead(BaseModel):
 
 class OpportunityWithContacts(OpportunityRead):
     """Used by GET /opportunities/{id} — bundles top-scored contacts inline."""
-    contacts: list[ContactRead] = []
+    
 
 
 class DraftWithContext(DraftRead):
     """
-    Used by the approval queue UI — bundles enough context (opportunity name,
+    Used by the approval queue UI - bundles enough context (opportunity name,
     contact name, score) so the rep can decide without N+1 fetches.
     """
     opportunity_title: str

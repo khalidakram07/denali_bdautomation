@@ -112,9 +112,14 @@ def generate(req: DraftGenerateRequest):
     sender_name = os.getenv("DEFAULT_SENDER_NAME", "Maryam")
 
     try:
-        draft = generate_draft(opp, contact, sender_name=sender_name)
+        draft = generate_draft(
+            opp, contact,
+            sender_name=sender_name,
+            template_filename=req.template_filename,
+        )
     except Exception as e:
-        log.exception("AI generation failed for opp=%s contact=%s", req.opportunity_id, req.contact_id)
+        log.exception("AI generation failed for opp=%s contact=%s template=%s",
+                      req.opportunity_id, req.contact_id, req.template_filename)
         raise HTTPException(502, f"AI generation failed: {e}")
 
     with db_cursor() as cur:
@@ -345,7 +350,6 @@ def reject_draft(draft_id: int, body: DraftReject):
         )
         cur.execute("SELECT * FROM email_drafts WHERE id = ?", (draft_id,))
         new_row = cur.fetchone()
-
     log_activity(
         "draft", draft_id, "rejected",
         actor_type="user", actor_id=body.rejected_by,

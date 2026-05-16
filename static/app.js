@@ -161,6 +161,51 @@ function renderOpportunity(o) {
       ${field('Therapeutic Area', o.therapeutic_area, true)}
       ${field('Protocol Start', fmtDate(o.protocol_start), true)}
     </div>
+    ${renderRawData(o.raw_data)}
+  `;
+
+  // Wire the raw-data toggle (re-attached every render since we rebuild HTML)
+  const rd = $('oppBody').querySelector('.raw-data');
+  if (rd) {
+    rd.querySelector('.raw-data-toggle').addEventListener('click', () => {
+      rd.classList.toggle('open');
+    });
+  }
+}
+
+function renderRawData(raw) {
+  if (!raw || typeof raw !== 'object' || Object.keys(raw).length === 0) {
+    return '';
+  }
+  // Order keys: show "Full Text" / "Source URL" last because they're long
+  const allKeys = Object.keys(raw);
+  const longKeys = allKeys.filter(k => /full.?text|source.?url|description|summary/i.test(k));
+  const shortKeys = allKeys.filter(k => !longKeys.includes(k));
+  const ordered = [...shortKeys, ...longKeys];
+
+  const rows = ordered.map(key => {
+    const v = raw[key];
+    if (v == null || v === '') return '';
+    let valHtml;
+    if (/^\s*https?:\/\//.test(String(v))) {
+      valHtml = `<a href="${escapeHtml(v)}" target="_blank" rel="noopener">${escapeHtml(v)}</a>`;
+    } else if (/full.?text|description|summary/i.test(key) && String(v).length > 200) {
+      valHtml = `<span class="val fulltext">${escapeHtml(v)}</span>`;
+      return `<div class="raw-row"><span class="key">${escapeHtml(key)}</span>${valHtml}</div>`;
+    } else {
+      valHtml = escapeHtml(String(v));
+    }
+    return `<div class="raw-row"><span class="key">${escapeHtml(key)}</span><span class="val">${valHtml}</span></div>`;
+  }).join('');
+
+  return `
+    <div class="raw-data">
+      <div class="raw-data-toggle">
+        <span class="arrow">▶</span>
+        Source data · ${ordered.length} fields from Clinwire
+      </div>
+      <div class="raw-data-body">${rows}</div>
+    </div>
   `;
 }
 
@@ -379,10 +424,15 @@ async function onGenerate() {
   }
   hide('generateError');
   showLoading();
+  const templateFilename = $('templateSelect').value || null;
+  if (templateFilename) {
+    logEntry(`Generating with template: ${templateFilename}`, 'sys');
+  }
   try {
     const draft = await API.post('/api/drafts/generate', {
       opportunity_id: state.oppId,
       contact_id: state.primaryContact.id,
+      template_filename: templateFilename,
     });
     renderDraft(draft);
   } catch (err) {
@@ -478,20 +528,32 @@ async function loadMailboxes() {
   try {
     const data = await API.get('/api/campaigns/mailboxes');
     const sel = $('mailboxSelect');
-    // Keep the first "don't send" option, replace the rest
     while (sel.options.length > 1) sel.remove(1);
     (data.mailboxes || []).forEach(mb => {
       const label = `${mb.display_name} <${mb.email}>${mb.ready ? '' : '  (dry-run)'}`;
       sel.appendChild(new Option(label, mb.email));
     });
     if (data.mailboxes && data.mailboxes.length > 0) {
-      // Default to first ready mailbox, else first
       const firstReady = data.mailboxes.find(m => m.ready) || data.mailboxes[0];
       sel.value = firstReady.email;
     }
     logEntry(`Loaded ${data.mailboxes ? data.mailboxes.length : 0} mailboxes`, 'sys');
   } catch (err) {
     logEntry(`Mailbox load failed: ${err.message}`, 'err');
+  }
+}
+
+async function loadTemplates() {
+  try {
+    const data = await API.get('/api/campaigns/templates');
+    const sel = $('templateSelect');
+    while (sel.options.length > 1) sel.remove(1);
+    (data.templates || []).forEach(t => {
+      sel.appendChild(new Option(`${t.display_name}  (${t.filename})`, t.filename));
+    });
+    logEntry(`Loaded ${data.templates ? data.templates.length : 0} email templates`, 'sys');
+  } catch (err) {
+    logEntry(`Template load failed: ${err.message}`, 'err');
   }
 }
 
@@ -572,6 +634,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 
   logEntry('Session started', 'sys');
   await loadMailboxes();
+  await loadTemplates();
   await refreshOpportunityList();
   await loadSendHistory();
   await pollLog();

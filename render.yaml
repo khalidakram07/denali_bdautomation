@@ -1,0 +1,64 @@
+# Render deployment config for Denali Health BD Automation
+#
+# Deploy steps:
+#   1. Push this repo to GitHub.
+#   2. Sign in at https://dashboard.render.com -> New + -> Blueprint.
+#   3. Connect this repo. Render reads this file and provisions:
+#         - one Web Service (the app)
+#         - one 1 GB persistent disk mounted at /data (for denali.db)
+#   4. Render will prompt you for the secret env vars (`sync: false` below):
+#         APP_PASSWORD       - your single login password
+#         ANTHROPIC_API_KEY  - from console.anthropic.com
+#         MAILBOXES_JSON     - paste mailboxes.json contents as one line
+#   5. Click Apply. First build ~3 min. Then open the .onrender.com URL.
+
+services:
+  - type: web
+    name: denali-bd
+    runtime: python
+    plan: starter                  # $7/mo, always-on. "free" sleeps after 15 min idle.
+    region: oregon                 # change if you want EU: frankfurt
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    autoDeploy: true               # auto-deploy on git push to main
+
+    disk:
+      name: denali-data
+      mountPath: /data
+      sizeGB: 1                    # 1 GB is way more than enough; can grow later
+
+    envVars:
+      # ── Non-secret config (committed) ───────────────────────
+      - key: APP_ENV
+        value: production
+      - key: PYTHON_VERSION
+        value: "3.11.9"
+      - key: LOG_LEVEL
+        value: INFO
+      - key: DATABASE_PATH
+        value: /data/denali.db
+      - key: ANTHROPIC_MODEL
+        value: claude-sonnet-4-6
+      - key: ANTHROPIC_MAX_TOKENS
+        value: "1024"
+      - key: DEFAULT_APPROVER_NAME
+        value: Maryam
+      - key: DEFAULT_SENDER_NAME
+        value: Maryam
+      - key: MIN_CONTACT_SCORE
+        value: "60"
+      - key: DAILY_SEND_LIMIT
+        value: "50"
+      - key: FOLLOWUP_DAYS
+        value: "5,11,20"
+
+      # ── Secrets (set in dashboard, never in git) ────────────
+      - key: APP_PASSWORD
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: MAILBOXES_JSON
+        sync: false
+      - key: ALLOWED_ORIGINS
+        sync: false                # paste your final URL after first deploy
