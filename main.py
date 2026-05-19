@@ -24,7 +24,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from database import init_db
-from routers import campaigns, contacts, drafts, opportunities
+from routers import campaigns, contacts, drafts, opportunities, sync
 from services.auth import BasicAuthMiddleware
 
 # ── Config ──────────────────────────────────────
@@ -89,6 +89,7 @@ app.include_router(opportunities.router, prefix="/api/opportunities", tags=["opp
 app.include_router(contacts.router,      prefix="/api/contacts",      tags=["contacts"])
 app.include_router(drafts.router,        prefix="/api/drafts",        tags=["drafts"])
 app.include_router(campaigns.router,     prefix="/api/campaigns",     tags=["campaigns"])
+app.include_router(sync.router,          prefix="/api/sync",          tags=["sync"])
 
 
 # ── Health check ────────────────────────────────
@@ -117,6 +118,8 @@ if STATIC_DIR.exists():
 
 
 # ── `python main.py` entry point ────────────────
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(

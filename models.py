@@ -244,7 +244,8 @@ class ActivityLogRead(BaseModel):
 
 class OpportunityWithContacts(OpportunityRead):
     """Used by GET /opportunities/{id} — bundles top-scored contacts inline."""
-    
+    contacts: list[ContactRead] = []
+
 
 
 class DraftWithContext(DraftRead):

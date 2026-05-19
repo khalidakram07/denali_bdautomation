@@ -91,3 +91,6 @@ desktop.ini
 
 # Gmail mailbox config — contains app passwords, never commit
 mailboxes.json
+
+# Google service account key — contains private key, never commit
+google_credentials.json

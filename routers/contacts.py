@@ -106,8 +106,78 @@ def update_contact(contact_id: int, patch: ContactUpdate):
 
 
 # ─────────────────────────────────────────────────────────────
-# POST /api/contacts/seed-dummy/{opp_id}
+# POST /api/contacts/ — manually create a real contact
 # ─────────────────────────────────────────────────────────────
+
+from models import ContactCreate   # local import to avoid circular
+
+
+@router.post("/", response_model=ContactRead, status_code=status.HTTP_201_CREATED)
+def create_contact(body: ContactCreate):
+    """
+    Manually add a real contact (e.g. someone Maryam looked up on LinkedIn
+    or Apollo). Defaults to a contact_score of 80 so it sits high in the list.
+    """
+    # Verify opportunity exists
+    with db_cursor() as cur:
+        cur.execute("SELECT id FROM opportunities WHERE id = ?", (body.opportunity_id,))
+        if not cur.fetchone():
+            raise HTTPException(404, f"Opportunity {body.opportunity_id} not found")
+
+        # Insert with a sensible default score; manually-added contacts are presumed solid
+        cur.execute(
+            """
+            INSERT INTO contacts
+                (opportunity_id, first_name, last_name, email, email_verified,
+                 title, seniority, department, geography, apollo_id,
+                 contact_score, score_reasoning, is_primary)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                body.opportunity_id,
+                body.first_name, body.last_name,
+                body.email, int(bool(body.email_verified)),
+                body.title, body.seniority, body.department, body.geography,
+                body.apollo_id,
+                80,                                         # default score (sum of dims below)
+                json.dumps({
+                    "title_relevance": 30,
+                    "seniority":       20,
+                    "department":      17,
+                    "geography":        8,
+                    "email_verified":   5,
+                    "rationale":       "Manually added by user — score assumed reliable; verify email before send.",
+                }),
+                1,                                          # make primary by default
+            ),
+        )
+        new_id = cur.lastrowid
+
+        # Demote any other primary contact for this opportunity
+        cur.execute(
+            "UPDATE contacts SET is_primary = 0 WHERE opportunity_id = ? AND id != ?",
+            (body.opportunity_id, new_id),
+        )
+
+        # Bump opportunity status
+        cur.execute(
+            "UPDATE opportunities SET status='enriched' WHERE id = ? AND status='new'",
+            (body.opportunity_id,),
+        )
+        cur.execute("SELECT * FROM contacts WHERE id = ?", (new_id,))
+        row = cur.fetchone()
+
+    log_activity(
+        "contact", new_id, "created_manually",
+        actor_type="user",
+        metadata={"opportunity_id": body.opportunity_id, "email": body.email},
+    )
+    return _row_to_contact(row)
+
+
+# -------------------------------------------------------------
+# POST /api/contacts/seed-dummy/{opp_id}
+# -------------------------------------------------------------
 
 @router.post("/seed-dummy/{opp_id}", status_code=status.HTTP_201_CREATED)
 def seed_dummy_contacts(opp_id: int, n: int = Query(3, ge=1, le=10)):
@@ -115,7 +185,6 @@ def seed_dummy_contacts(opp_id: int, n: int = Query(3, ge=1, le=10)):
     DEMO ONLY: seed n plausible contacts (with scores) for an opportunity.
     The first contact is marked is_primary=true. Replaces real Apollo enrichment.
     """
-    # Verify opportunity exists
     with db_cursor() as cur:
         cur.execute("SELECT * FROM opportunities WHERE id = ?", (opp_id,))
         opp_row = cur.fetchone()
@@ -142,23 +211,16 @@ def seed_dummy_contacts(opp_id: int, n: int = Query(3, ge=1, le=10)):
                 """,
                 (
                     contact.opportunity_id,
-                    contact.first_name,
-                    contact.last_name,
-                    contact.email,
-                    int(contact.email_verified),
-                    contact.title,
-                    contact.seniority,
-                    contact.department,
-                    contact.geography,
+                    contact.first_name, contact.last_name,
+                    contact.email, int(contact.email_verified),
+                    contact.title, contact.seniority, contact.department, contact.geography,
                     contact.apollo_id,
-                    total,
-                    score.model_dump_json(),
+                    total, score.model_dump_json(),
                     1 if i == 0 else 0,
                 ),
             )
             inserted_ids.append(cur.lastrowid)
 
-        # Bump opportunity status: new → enriched
         cur.execute(
             "UPDATE opportunities SET status='enriched' WHERE id = ? AND status='new'",
             (opp_id,),

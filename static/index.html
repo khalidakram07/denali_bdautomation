@@ -31,7 +31,27 @@
     <label for="oppSelect">Opportunity</label>
     <select id="oppSelect"><option value="">— none yet —</option></select>
   </div>
+  <button id="syncBtn" class="btn btn-secondary">↻ Sync from Google Sheets</button>
   <button id="seedBtn" class="btn btn-secondary hidden">Seed demo contacts</button>
+  <button id="addContactBtn" class="btn btn-secondary hidden">+ Add real contact</button>
+</div>
+
+<!-- Manual contact entry form (hidden until + Add real contact clicked) -->
+<div id="addContactForm" class="hidden" style="max-width:1100px;margin:0 auto;padding:0 24px 16px;">
+  <div class="panel" style="padding:20px;">
+    <div style="font-size:13px;font-weight:600;margin-bottom:12px;color:var(--ink);">Add a real contact for this opportunity</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 2fr 2fr;gap:10px;margin-bottom:12px;">
+      <input id="acFirst" type="text" placeholder="First name *" style="padding:8px 10px;border:1px solid var(--rule);border-radius:6px;font-size:13px;">
+      <input id="acLast"  type="text" placeholder="Last name"  style="padding:8px 10px;border:1px solid var(--rule);border-radius:6px;font-size:13px;">
+      <input id="acEmail" type="email" placeholder="Email * (e.g. d.collins@precisionformedicine.com)" style="padding:8px 10px;border:1px solid var(--rule);border-radius:6px;font-size:13px;">
+      <input id="acTitle" type="text" placeholder="Title (e.g. VP, Site Identification)" style="padding:8px 10px;border:1px solid var(--rule);border-radius:6px;font-size:13px;">
+    </div>
+    <div style="display:flex;gap:10px;">
+      <button id="acSubmit" class="btn btn-approve">✓ Add contact</button>
+      <button id="acCancel" class="btn btn-secondary">Cancel</button>
+      <span id="acError" style="color:var(--red);font-size:12px;align-self:center;"></span>
+    </div>
+  </div>
 </div>
 
 <!-- ── EMPTY STATE (no opportunities yet) ─────── -->
@@ -102,6 +122,8 @@
           <select id="templateSelect" style="font-size:13px;padding:6px 12px;border:1px solid var(--rule);border-radius:6px;background:var(--white);font-family:inherit;cursor:pointer;min-width:240px;">
             <option value="">— None (pure AI generation) —</option>
           </select>
+          <button id="refreshTemplatesBtn" type="button" title="Refresh templates from Google Drive"
+                  style="font-size:13px;padding:6px 10px;border:1px solid var(--rule);border-radius:6px;background:var(--white);cursor:pointer;font-family:inherit;">↻</button>
         </div>
 
         <button id="generateBtn" class="btn btn-generate">

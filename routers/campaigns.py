@@ -17,7 +17,7 @@ from fastapi import APIRouter, Query
 from database import db_cursor
 from models import ActivityLogRead, EmailSendRead, SendStatus
 from services.email_sender import list_mailboxes_public
-from services.template_engine import list_templates
+from services.template_engine import list_templates, refresh_templates_cache
 
 log = logging.getLogger(__name__)
 router = APIRouter()
@@ -117,12 +117,19 @@ def list_mailboxes():
 
 
 @router.get("/templates")
-def list_email_templates():
+def list_email_templates(refresh: bool = False):
     """
-    Returns the .docx email templates in templates/.
-    Used by the UI to populate the template dropdown in the generate step.
+    Returns merged template list from Drive folder (if configured) + local
+    templates/ folder. Pass ?refresh=true to bust the Drive cache.
     """
-    return {"templates": list_templates()}
+    return {"templates": list_templates(force_refresh=refresh)}
+
+
+@router.post("/templates/refresh")
+def refresh_templates():
+    """Bust the Drive templates cache. Used by the UI's refresh button."""
+    cleared = refresh_templates_cache()
+    return {"cleared": cleared, "templates": list_templates(force_refresh=True)}
 
 
 @router.get("/sent-history")

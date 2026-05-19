@@ -131,14 +131,24 @@ async function loadOpportunity(oppId) {
   renderOtherContacts(state.contacts.filter(c => c !== state.primaryContact));
   resetDraftView();
 
-  // Show seed button if there are no contacts
+  // Both buttons visible whenever an opportunity is loaded — let user choose
+  show('addContactBtn');
+  show('seedBtn');
+
   if (state.contacts.length === 0) {
-    show('seedBtn');
-    $('contactBody').innerHTML = `<div style="padding:16px;color:var(--ink-soft);font-size:13px;">No contacts yet. Click "Seed demo contacts" above to populate.</div>`;
+    $('contactBody').innerHTML = `<div style="padding:16px;color:var(--amber);font-size:13px;background:var(--amber-light);border:1px solid #fed7aa;border-radius:8px;margin:4px;">
+      <strong>No contacts on this opportunity yet.</strong><br>
+      <span style="font-size:12px;color:var(--ink-mid);display:block;margin-top:8px;">
+        Two options at the top of the page:<br>
+        • <strong>"+ Add real contact"</strong> — type in a real person (LinkedIn / Apollo lookup)<br>
+        • <strong>"Seed demo contacts"</strong> — generates 3 placeholder contacts for testing the flow
+      </span>
+    </div>`;
     $('generateBtn').disabled = true;
+    $('generateBtn').title = 'Add a contact first (real or demo)';
   } else {
-    hide('seedBtn');
     $('generateBtn').disabled = false;
+    $('generateBtn').title = '';
   }
 }
 
@@ -403,6 +413,29 @@ async function onUpload(e) {
   }
 }
 
+async function onSyncSheets() {
+  const btn = $('syncBtn');
+  btn.disabled = true;
+  const original = btn.textContent;
+  btn.textContent = '↻ Syncing...';
+  try {
+    const res = await API.post('/api/sync/sheets', {});
+    const opp = res.opportunities || {};
+    const c = res.contacts || {};
+    logEntry(
+      `Sync done in ${res.elapsed_seconds}s · opps: ${opp.inserted} new / ${opp.duplicates} dup · ` +
+      `contacts: ${c.inserted} inserted / ${c.skipped_no_opp} skipped (no opp match)`,
+      'ok'
+    );
+    await refreshOpportunityList();
+  } catch (err) {
+    logEntry(`Sheet sync failed: ${err.message}`, 'err');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = original;
+  }
+}
+
 async function onSeed() {
   if (!state.oppId) return;
   $('seedBtn').disabled = true;
@@ -414,6 +447,51 @@ async function onSeed() {
     logEntry(`Seed failed: ${err.message}`, 'err');
   } finally {
     $('seedBtn').disabled = false;
+  }
+}
+
+function onToggleAddContact() {
+  const form = $('addContactForm');
+  if (form.classList.contains('hidden')) {
+    form.classList.remove('hidden');
+    $('acFirst').focus();
+    $('acError').textContent = '';
+  } else {
+    form.classList.add('hidden');
+  }
+}
+
+async function onSubmitContact() {
+  if (!state.oppId) {
+    $('acError').textContent = 'Pick an opportunity first';
+    return;
+  }
+  const first = $('acFirst').value.trim();
+  const email = $('acEmail').value.trim();
+  if (!first || !email) {
+    $('acError').textContent = 'First name and email are required';
+    return;
+  }
+  $('acError').textContent = '';
+  $('acSubmit').disabled = true;
+  try {
+    await API.post('/api/contacts/', {
+      opportunity_id: state.oppId,
+      first_name: first,
+      last_name:  $('acLast').value.trim() || null,
+      email:      email,
+      title:      $('acTitle').value.trim() || null,
+    });
+    logEntry(`Manually added contact: ${first} ${$('acLast').value.trim()} <${email}>`, 'ok');
+    // Clear and hide
+    ['acFirst','acLast','acEmail','acTitle'].forEach(id => $(id).value = '');
+    $('addContactForm').classList.add('hidden');
+    await loadOpportunity(state.oppId);
+  } catch (err) {
+    $('acError').textContent = err.message;
+    logEntry(`Add contact failed: ${err.message}`, 'err');
+  } finally {
+    $('acSubmit').disabled = false;
   }
 }
 
@@ -534,22 +612,42 @@ async function loadMailboxes() {
       sel.appendChild(new Option(label, mb.email));
     });
     if (data.mailboxes && data.mailboxes.length > 0) {
-      const firstReady = data.mailboxes.find(m => m.ready) || data.mailboxes[0];
-      sel.value = firstReady.email;
+      // Prefer last-used mailbox if it still exists, else first ready, else first
+      const saved = localStorage.getItem('denali_last_mailbox');
+      if (saved && Array.from(sel.options).some(o => o.value === saved)) {
+        sel.value = saved;
+      } else {
+        const firstReady = data.mailboxes.find(m => m.ready) || data.mailboxes[0];
+        sel.value = firstReady.email;
+      }
     }
+    // Save on every change
+    sel.addEventListener('change', () => {
+      localStorage.setItem('denali_last_mailbox', sel.value);
+    });
     logEntry(`Loaded ${data.mailboxes ? data.mailboxes.length : 0} mailboxes`, 'sys');
   } catch (err) {
     logEntry(`Mailbox load failed: ${err.message}`, 'err');
   }
 }
 
-async function loadTemplates() {
+async function loadTemplates(forceRefresh = false) {
   try {
-    const data = await API.get('/api/campaigns/templates');
+    const path = forceRefresh ? '/api/campaigns/templates?refresh=true' : '/api/campaigns/templates';
+    const data = await API.get(path);
     const sel = $('templateSelect');
     while (sel.options.length > 1) sel.remove(1);
     (data.templates || []).forEach(t => {
       sel.appendChild(new Option(`${t.display_name}  (${t.filename})`, t.filename));
+    });
+    // Restore last-used template from localStorage if it still exists in the list
+    const saved = localStorage.getItem('denali_last_template');
+    if (saved && Array.from(sel.options).some(o => o.value === saved)) {
+      sel.value = saved;
+    }
+    // Save on every change
+    sel.addEventListener('change', () => {
+      localStorage.setItem('denali_last_template', sel.value);
     });
     logEntry(`Loaded ${data.templates ? data.templates.length : 0} email templates`, 'sys');
   } catch (err) {
@@ -623,7 +721,27 @@ async function onReject() {
 window.addEventListener('DOMContentLoaded', async () => {
   $('csvFile').addEventListener('change', onUpload);
   $('oppSelect').addEventListener('change', e => loadOpportunity(e.target.value));
+  $('syncBtn').addEventListener('click', onSyncSheets);
+  $('refreshTemplatesBtn').addEventListener('click', async () => {
+    const btn = $('refreshTemplatesBtn');
+    btn.disabled = true;
+    const old = btn.textContent;
+    btn.textContent = '⏳';
+    try {
+      const r = await API.post('/api/campaigns/templates/refresh', {});
+      logEntry(`Templates refreshed: ${(r.templates || []).length} available (drive cache cleared)`, 'ok');
+      await loadTemplates(true);
+    } catch (err) {
+      logEntry(`Template refresh failed: ${err.message}`, 'err');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = old;
+    }
+  });
   $('seedBtn').addEventListener('click', onSeed);
+  $('addContactBtn').addEventListener('click', onToggleAddContact);
+  $('acSubmit').addEventListener('click', onSubmitContact);
+  $('acCancel').addEventListener('click', onToggleAddContact);
   $('generateBtn').addEventListener('click', onGenerate);
   $('editBtn').addEventListener('click', onToggleEdit);
   $('approveBtn').addEventListener('click', onApprove);

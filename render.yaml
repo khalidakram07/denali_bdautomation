@@ -53,6 +53,18 @@ services:
       - key: FOLLOWUP_DAYS
         value: "5,11,20"
 
+      # ── Google Sheets (non-secret) ──────────────────────────
+      - key: GOOGLE_SHEETS_ID
+        value: "1_WsZa4tmBb36YBhyFFZzq0MhW8b-1JR4xub88xyTgJ0"
+      - key: SHEETS_TAB_COMPANIES
+        value: "Clinical Trial Companies"
+      - key: SHEETS_TAB_CONTACTS
+        value: "Decision Maker Contacts"
+      - key: SHEETS_TAB_SENT_LOG
+        value: "Sent Log"
+      - key: GOOGLE_DRIVE_TEMPLATES_FOLDER_ID
+        value: "1UX8-1tv2fO683R2Czr2Qa4ILPIrrDj4h"
+
       # ── Secrets (set in dashboard, never in git) ────────────
       - key: APP_PASSWORD
         sync: false
@@ -60,5 +72,7 @@ services:
         sync: false
       - key: MAILBOXES_JSON
         sync: false
+      - key: GOOGLE_SERVICE_ACCOUNT_JSON
+        sync: false                # paste contents of google_credentials.json as one line
       - key: ALLOWED_ORIGINS
         sync: false                # paste your final URL after first deploy

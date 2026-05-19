@@ -23,6 +23,11 @@ anthropic>=0.39.0
 # ── Email templates (.docx) ────────────────────
 python-docx>=1.1.2
 
+# ── Google Sheets sync (service account auth) ──
+gspread>=6.1.0
+google-api-python-client>=2.140.0
+google-auth>=2.30.0
+
 # ── Environment / config ────────────────────────
 python-dotenv>=1.0.1
 
