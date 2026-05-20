@@ -1,23 +1,20 @@
 """
-services/email_sender.py - Gmail SMTP sender.
+services/email_sender.py - Gmail SMTP sender (with optional attachments).
 
 In dev: reads mailboxes.json at the project root.
 In production: reads the MAILBOXES_JSON env var (same JSON array format).
 
-How to add a real Gmail account:
-  1. The account must have 2-Step Verification turned on.
-  2. Generate an "App password" here (signed into THAT account):
-        https://myaccount.google.com/apppasswords
-  3. Paste the 16-char password into mailboxes.json under "app_password".
+App passwords: account needs 2-Step Verification, then generate one at
+https://myaccount.google.com/apppasswords
 
-Dry-run mode:
-  If `app_password` is missing or starts with "REPLACE", the send is faked -
-  we log a warning and return a fake message-id. Lets the demo flow work
-  end-to-end without real credentials.
+Dry-run mode: if app_password is missing or starts with "REPLACE", the send is
+faked (logs a warning, returns a fake message-id) so the demo flow works
+without real credentials.
 """
 
 import json
 import logging
+import mimetypes
 import os
 import smtplib
 import ssl
@@ -31,6 +28,8 @@ log = logging.getLogger(__name__)
 
 CONFIG_PATH = Path(__file__).resolve().parent.parent / "mailboxes.json"
 
+SCOPES_NOTE = "Gmail SMTP (smtp.gmail.com:587, STARTTLS)"
+
 
 def _is_dry_run(mailbox: dict) -> bool:
     pw = (mailbox.get("app_password") or "").strip()
@@ -38,16 +37,7 @@ def _is_dry_run(mailbox: dict) -> bool:
 
 
 def load_mailboxes() -> list[dict]:
-    """
-    Load mailbox configs. Two sources, in order:
-
-    1. MAILBOXES_JSON env var (production / Render) - so we don't ship
-       app passwords in the repo. Same JSON array structure as the file.
-    2. mailboxes.json on disk (local dev).
-
-    Returns [] if neither source yields a valid list.
-    """
-    # Source 1: env var (production)
+    """Load mailbox configs: MAILBOXES_JSON env var first, then mailboxes.json file."""
     env_json = os.getenv("MAILBOXES_JSON", "").strip()
     if env_json:
         try:
@@ -59,7 +49,6 @@ def load_mailboxes() -> list[dict]:
             log.error("MAILBOXES_JSON env var is invalid JSON: %s", e)
         return []
 
-    # Source 2: file (local dev)
     if not CONFIG_PATH.exists():
         log.warning("mailboxes.json not found at %s - no mailboxes configured", CONFIG_PATH)
         return []
@@ -75,10 +64,7 @@ def load_mailboxes() -> list[dict]:
 
 
 def list_mailboxes_public() -> list[dict]:
-    """
-    Returns mailbox info safe to expose to the frontend (no passwords).
-    Each item: {email, display_name, ready (bool - false if dry-run/missing pw)}
-    """
+    """Mailbox info safe for the frontend (no passwords)."""
     out = []
     for m in load_mailboxes():
         out.append({
@@ -90,22 +76,34 @@ def list_mailboxes_public() -> list[dict]:
 
 
 def find_mailbox(email: str) -> Optional[dict]:
-    """Look up a mailbox by email. Returns None if not configured."""
     for m in load_mailboxes():
         if m.get("email", "").lower() == email.lower():
             return m
     return None
 
 
-# -------------------------------------------------------------
-# Send
-# -------------------------------------------------------------
-
 class SendResult:
-    def __init__(self, message_id: str, dry_run: bool, sent_via: str):
+    def __init__(self, message_id: str, dry_run: bool, sent_via: str, attachment_count: int = 0):
         self.message_id = message_id
         self.dry_run    = dry_run
         self.sent_via   = sent_via
+        self.attachment_count = attachment_count
+
+
+def _attach_files(msg: EmailMessage, attachments: list[tuple[str, bytes]]) -> int:
+    """Attach (filename, bytes) tuples to the message. Returns count attached."""
+    count = 0
+    for fname, data in attachments or []:
+        if not fname or data is None:
+            continue
+        ctype, _ = mimetypes.guess_type(fname)
+        if ctype is None:
+            maintype, subtype = "application", "octet-stream"
+        else:
+            maintype, subtype = ctype.split("/", 1)
+        msg.add_attachment(data, maintype=maintype, subtype=subtype, filename=fname)
+        count += 1
+    return count
 
 
 def send_email(
@@ -114,32 +112,33 @@ def send_email(
     subject: str,
     body_text: str,
     sender_display_name: Optional[str] = None,
+    attachments: Optional[list[tuple[str, bytes]]] = None,
 ) -> SendResult:
     """
-    Send an email through the chosen Gmail mailbox.
+    Send an email through the chosen Gmail mailbox, optionally with attachments.
 
-    Raises ValueError if the mailbox isn't configured.
+    attachments: list of (filename, raw_bytes) tuples.
+    Raises ValueError if the mailbox/recipient is missing.
     Raises smtplib errors if the SMTP server rejects the send.
-    Returns SendResult with the Message-ID (real or fake in dry-run).
     """
     mb = find_mailbox(from_mailbox_email)
     if not mb:
         raise ValueError(f"Mailbox '{from_mailbox_email}' is not configured")
-
     if not to_email:
         raise ValueError("Cannot send: contact has no email address")
 
     display = sender_display_name or mb.get("display_name") or mb["email"]
     message_id = make_msgid(domain=mb["email"].split("@")[-1])
+    n_attach = len(attachments or [])
 
     if _is_dry_run(mb):
         fake_id = f"<dryrun-{uuid.uuid4()}@denali.local>"
         log.warning(
-            "DRY-RUN send: would have emailed %s from %s (subject=%r). "
+            "DRY-RUN send: would have emailed %s from %s (subject=%r, attachments=%d). "
             "Set a real app_password to actually send.",
-            to_email, mb["email"], subject[:60],
+            to_email, mb["email"], subject[:60], n_attach,
         )
-        return SendResult(message_id=fake_id, dry_run=True, sent_via=mb["email"])
+        return SendResult(message_id=fake_id, dry_run=True, sent_via=mb["email"], attachment_count=n_attach)
 
     msg = EmailMessage()
     msg["From"]       = formataddr((display, mb["email"]))
@@ -150,17 +149,18 @@ def send_email(
     msg["Reply-To"]   = mb["email"]
     msg.set_content(body_text)
 
+    attached = _attach_files(msg, attachments or [])
+
     host = mb.get("smtp_host", "smtp.gmail.com")
     port = int(mb.get("smtp_port", 587))
-
-    log.info("Sending via %s:%d as %s -> %s", host, port, mb["email"], to_email)
+    log.info("Sending via %s:%d as %s -> %s (%d attachments)", host, port, mb["email"], to_email, attached)
 
     context = ssl.create_default_context()
-    with smtplib.SMTP(host, port, timeout=30) as server:
+    with smtplib.SMTP(host, port, timeout=60) as server:
         server.ehlo()
         server.starttls(context=context)
         server.ehlo()
         server.login(mb["email"], mb["app_password"])
         server.send_message(msg)
 
-    return SendResult(message_id=message_id, dry_run=False, sent_via=mb["email"])
+    return SendResult(message_id=message_id, dry_run=False, sent_via=mb["email"], attachment_count=attached)

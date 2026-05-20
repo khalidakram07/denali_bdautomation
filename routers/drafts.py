@@ -15,12 +15,11 @@ import os
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile, status
 
 from database import db_cursor, log_activity
 from models import (
     ApprovalStatus,
-    DraftApprove,
     DraftGenerateRequest,
     DraftRead,
     DraftReject,
@@ -177,11 +176,40 @@ def get_draft(draft_id: int):
 # ─────────────────────────────────────────────────────────────
 
 @router.post("/{draft_id}/approve")
-def approve_draft(draft_id: int, body: DraftApprove):
+async def approve_draft(
+    draft_id: int,
+    approved_by: str = Form(...),
+    edited_body: Optional[str] = Form(None),
+    edited_subject: Optional[str] = Form(None),
+    from_mailbox: Optional[str] = Form(None),
+    to_email_override: Optional[str] = Form(None),
+    attachments: list[UploadFile] = File(default=[]),
+):
     """
     Approve a pending draft. If `from_mailbox` is provided, also send the email
     via that Gmail mailbox and log a row in email_sends.
+
+    Accepts multipart/form-data so Maryam can attach one or more files from her
+    computer at send time (repeat the `attachments` field for each file).
     """
+    # Normalise empty-string form fields to None
+    edited_body       = (edited_body or "").strip() or None
+    edited_subject    = (edited_subject or "").strip() or None
+    from_mailbox      = (from_mailbox or "").strip() or None
+    to_email_override = (to_email_override or "").strip() or None
+
+    # Read each uploaded attachment into memory as a (filename, bytes) tuple
+    attachment_files: list[tuple[str, bytes]] = []
+    attachment_names: list[str] = []
+    for up in attachments or []:
+        if up is None or not up.filename:
+            continue
+        data = await up.read()
+        if data:
+            attachment_names.append(up.filename)
+            attachment_files.append((up.filename, data))
+    attachment_label = ", ".join(attachment_names) if attachment_names else None
+
     # 1. Validate + load
     with db_cursor() as cur:
         cur.execute(
@@ -203,10 +231,10 @@ def approve_draft(draft_id: int, body: DraftApprove):
 
     # 2. If a mailbox was provided, validate it exists in config
     chosen_mb = None
-    if body.from_mailbox:
-        chosen_mb = find_mailbox(body.from_mailbox)
+    if from_mailbox:
+        chosen_mb = find_mailbox(from_mailbox)
         if not chosen_mb:
-            raise HTTPException(400, f"Mailbox '{body.from_mailbox}' is not configured in mailboxes.json")
+            raise HTTPException(400, f"Mailbox '{from_mailbox}' is not configured in mailboxes.json")
 
     # 3. Mark approved (with any edits)
     with db_cursor() as cur:
@@ -221,39 +249,40 @@ def approve_draft(draft_id: int, body: DraftApprove):
             WHERE id = ?
             """,
             (
-                body.approved_by,
+                approved_by,
                 datetime.utcnow().isoformat(timespec="seconds"),
-                body.edited_body,
-                body.edited_subject,
+                edited_body,
+                edited_subject,
                 draft_id,
             ),
         )
 
     log_activity(
         "draft", draft_id, "approved",
-        actor_type="user", actor_id=body.approved_by,
-        metadata={"edited": bool(body.edited_body or body.edited_subject)},
+        actor_type="user", actor_id=approved_by,
+        metadata={"edited": bool(edited_body or edited_subject)},
     )
 
     # 4. Send the email if a mailbox was chosen
     send_info = None
     if chosen_mb:
         # Resolve recipient: override first, else contact's stored email
-        final_to = (body.to_email_override or draft_data.get("contact_email") or "").strip()
+        final_to = (to_email_override or draft_data.get("contact_email") or "").strip()
         if not final_to:
             raise HTTPException(400, "No recipient address — set one on the contact or pass to_email_override.")
 
-        final_subject = body.edited_subject or draft_data["subject_line"]
-        final_body    = body.edited_body    or draft_data["body_text"]
+        final_subject = edited_subject or draft_data["subject_line"]
+        final_body    = edited_body    or draft_data["body_text"]
         sender_display = os.getenv("DEFAULT_SENDER_NAME", "Maryam") + " (Denali Health)"
 
         try:
             result = send_email(
-                from_mailbox_email = body.from_mailbox,
+                from_mailbox_email = from_mailbox,
                 to_email           = final_to,
                 subject            = final_subject,
                 body_text          = final_body,
                 sender_display_name = sender_display,
+                attachments        = attachment_files or None,
             )
         except Exception as e:
             log.exception("Send failed for draft %s", draft_id)
@@ -269,7 +298,7 @@ def approve_draft(draft_id: int, body: DraftApprove):
             log_activity(
                 "send", draft_id, "send_failed",
                 actor_type="system",
-                metadata={"mailbox": body.from_mailbox, "error": str(e)[:200]},
+                metadata={"mailbox": from_mailbox, "error": str(e)[:200]},
             )
             raise HTTPException(502, f"Email approved but send failed: {e}")
 
@@ -286,7 +315,7 @@ def approve_draft(draft_id: int, body: DraftApprove):
                     draft_id,
                     final_to,
                     result.sent_via,
-                    1 if body.to_email_override else 0,
+                    1 if to_email_override else 0,
                     datetime.utcnow().isoformat(timespec="seconds"),
                     result.message_id,
                 ),
@@ -304,9 +333,11 @@ def approve_draft(draft_id: int, body: DraftApprove):
             metadata={
                 "mailbox":    result.sent_via,
                 "to":         final_to,
-                "to_overridden": bool(body.to_email_override),
+                "to_overridden": bool(to_email_override),
                 "dry_run":    result.dry_run,
                 "message_id": result.message_id,
+                "attachments": attachment_names,
+                "attachment_count": result.attachment_count,
             },
         )
 
@@ -316,7 +347,10 @@ def approve_draft(draft_id: int, body: DraftApprove):
             "sent_via":   result.sent_via,
             "dry_run":    result.dry_run,
             "to":         final_to,
-            "to_overridden": bool(body.to_email_override),
+            "to_overridden": bool(to_email_override),
+            "attachment": attachment_label,
+            "attachment_names": attachment_names,
+            "attachment_count": result.attachment_count,
         }
 
     # 6. Return the updated draft + send info

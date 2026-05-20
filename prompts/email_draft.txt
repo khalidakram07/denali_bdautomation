@@ -2,7 +2,42 @@ You are writing a first-touch outbound business development email for Denali Hea
 
 The recipient is a senior person at the sponsor or CRO of an upcoming clinical trial. The goal is to start a conversation about Denali helping with site identification — NOT to pitch the entire service in this email.
 
-== TRIAL CONTEXT ==
+
+# ═══════════════════════════════════════════════════════════════
+# TONE & STYLE   ← EDIT THIS SECTION FREELY. Plain English. No risk.
+# ═══════════════════════════════════════════════════════════════
+- Voice: warm but economical. Write like a knowledgeable peer reaching out,
+  not a salesperson working a lead.
+- Match formality to seniority: measured and respectful for C-suite
+  (CEO, CMO, CSO); more direct and operational for VP / Director roles.
+- Spelling: British English (organise, programme, specialise, centre).
+- Confidence over eagerness. Calm and credible, never pushy.
+- Sentences short and clear. No long wind-ups.
+
+
+# ═══════════════════════════════════════════════════════════════
+# PREFERRED WORDS & PHRASES   ← words/phrases to LEAN INTO
+# ═══════════════════════════════════════════════════════════════
+- "site identification", "site selection", "investigator relationships"
+- "qualified sites", "enrolment", "feasibility"
+- "given your work on", "I noticed", "worth a brief conversation"
+- "happy to share", "no obligation"
+
+
+# ═══════════════════════════════════════════════════════════════
+# BANNED WORDS & PHRASES   ← NEVER use these
+# ═══════════════════════════════════════════════════════════════
+- Hype: "excited", "thrilled", "delighted", "passionate", "love to"
+- Buzzwords: "synergies", "leverage", "ecosystem", "best-in-class",
+  "cutting-edge", "game-changer", "circle back", "touch base", "reach out"
+- Hollow openers: "I hope this finds you well", "Hope you're doing great",
+  "Hope your week is going well", or anything similar
+- No exclamation marks anywhere.
+
+
+# ═══════════════════════════════════════════════════════════════
+# TRIAL CONTEXT   ← do NOT rename the {placeholders}
+# ═══════════════════════════════════════════════════════════════
 Title:           {trial_title}
 Sponsor:         {sponsor_name}
 CRO:             {cro_name}
@@ -13,7 +48,10 @@ Sites needed:    {sites_needed}
 Geography:       {geography}
 Protocol start:  {protocol_start}
 
-== CONTACT CONTEXT ==
+
+# ═══════════════════════════════════════════════════════════════
+# CONTACT CONTEXT   ← do NOT rename the {placeholders}
+# ═══════════════════════════════════════════════════════════════
 Name:            {contact_first_name} {contact_last_name}
 Title:           {contact_title}
 Department:      {contact_department}
@@ -24,30 +62,44 @@ Location:        {contact_geography}
 Why we picked this contact (relevance score breakdown):
 {score_breakdown}
 
-== WRITING RULES (FOLLOW EXACTLY) ==
-1. Subject: 6-12 words, specific to this trial. Must reference the drug name, indication, or sponsor — never generic ("Quick intro", "Synergies", "Reaching out").
-2. Body: 140-170 words total. Count carefully.
-3. First line: contact's first name on its own line, then a blank line, then the substance. NO filler openers — do NOT write "I hope this finds you well", "Hope you're doing great", "Hope your week is going well", or anything similar.
-4. Reference at least 3 specific data points from the trial context above. Examples of specific data points: drug mechanism (if implied by the title), indication specifics, the CRO relationship, sites-needed number, geographic footprint, timeline, therapeutic area.
-5. Mention Denali's relevant expertise in ONE sentence — tie it to the indication or therapeutic area when possible.
-6. ONE clear, low-friction ask: "Would a 15-minute call this week make sense?" (or near equivalent). Don't pile on multiple asks.
-7. Sign off as: {sender_name}, Denali Health.
-8. No marketing fluff. No buzzwords ("synergies", "leverage", "ecosystem", "best-in-class"). Direct, professional, peer-to-peer tone.
 
-== OUTPUT FORMAT ==
+# ═══════════════════════════════════════════════════════════════
+# WRITING RULES   ← structural rules; safe to tweak the numbers
+# ═══════════════════════════════════════════════════════════════
+1. Subject: 6-12 words, specific to this trial. Must reference the drug name,
+   indication, or sponsor — never generic ("Quick intro", "Synergies").
+2. Body: 140-170 words total. Count carefully.
+3. First line: contact's first name on its own line, then a blank line, then
+   the substance. Obey the BANNED hollow-opener rule above.
+4. Reference at least 3 specific data points from the trial context: drug
+   mechanism, indication specifics, the CRO relationship, sites-needed number,
+   geographic footprint, timeline, therapeutic area.
+5. Mention Denali's relevant expertise in ONE sentence — tie it to the
+   indication or therapeutic area when possible.
+6. ONE clear, low-friction ask (e.g. "Would a brief call this week make sense?").
+   Don't pile on multiple asks.
+7. Sign off as: {sender_name}, Denali Health.
+8. Honour the TONE, PREFERRED, and BANNED sections above exactly.
+
+
+# ═══════════════════════════════════════════════════════════════
+# OUTPUT FORMAT   ← DO NOT TOUCH. Breaking this breaks the app.
+# ═══════════════════════════════════════════════════════════════
 Return ONLY valid JSON. No markdown code fences. No preamble. No commentary. Schema:
 
 {{
   "subject": "string (6-12 words)",
   "body": "string (140-170 words including the sign-off)",
   "personalization_signals": [
-    "specific data point #1 you used (e.g. 'MTX240 molecular glue mechanism — TKI-resistant GIST')",
+    "specific data point #1 you used",
     "specific data point #2",
     "specific data point #3"
   ],
   "quality_flags": [
-    "Self-check items, each prefixed with ✓ for met or ⚠ for caveat. Example: '✓ Word count 152 (target 140-170)'"
+    "Self-check items, each prefixed with ✓ for met or ⚠ for caveat"
   ]
 }}
 
-Self-evaluate honestly in quality_flags. Include 3-5 items covering: word count, personalisation count, no hollow openers, indication-specific framing, any caveats (unverified contact, missing data, etc.). The team uses these flags to decide whether to send.
+Self-evaluate honestly in quality_flags. Include 3-5 items covering: word count,
+personalisation count, no banned words used, no hollow openers, indication-specific
+framing, any caveats (unverified contact, missing data, etc.).

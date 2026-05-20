@@ -669,14 +669,20 @@ async function onApprove() {
   const storedTo   = (state.primaryContact && state.primaryContact.email) || '';
   const toOverride = (enteredTo && enteredTo.toLowerCase() !== storedTo.toLowerCase()) ? enteredTo : null;
 
+  // Optional attachments picked from the user's computer (single send only).
+  const attachFiles = ($('attachmentInput').files && Array.from($('attachmentInput').files)) || [];
+
+  // Build multipart form data — required so the files can ride along.
+  const fd = new FormData();
+  fd.append('approved_by', approver);
+  if (fromMailbox)   fd.append('from_mailbox', fromMailbox);
+  if (toOverride)    fd.append('to_email_override', toOverride);
+  if (editedSubject) fd.append('edited_subject', editedSubject);
+  if (editedBody)    fd.append('edited_body', editedBody);
+  attachFiles.forEach(f => fd.append('attachments', f, f.name));
+
   try {
-    const res = await API.post(`/api/drafts/${state.draft.id}/approve`, {
-      approved_by: approver,
-      from_mailbox: fromMailbox,
-      to_email_override: toOverride,
-      edited_subject: editedSubject,
-      edited_body: editedBody,
-    });
+    const res = await API.post(`/api/drafts/${state.draft.id}/approve`, fd, true);
     const draft = res.draft || res;            // backend now returns { draft, send }
     const send  = res.send || null;
     hide('draftResult');
@@ -688,14 +694,24 @@ async function onApprove() {
     if (send) {
       const mode = send.dry_run ? 'DRY-RUN' : 'SENT';
       const overrideTag = send.to_overridden ? ' [TO OVERRIDDEN]' : '';
-      logEntry(`${mode}: ${send.sent_via} → ${send.to}${overrideTag}  msg-id=${send.message_id}`, 'ok');
+      const attachTag = send.attachment_count ? `  📎 ${send.attachment_count} file(s): ${send.attachment}` : '';
+      logEntry(`${mode}: ${send.sent_via} → ${send.to}${overrideTag}${attachTag}  msg-id=${send.message_id}`, 'ok');
       loadSendHistory();   // refresh the history panel so the new row shows up
     } else {
       logEntry('Draft approved (no mailbox selected — not sent)', 'sys');
     }
+    // Reset the attachment picker after a successful approve/send.
+    clearAttachment();
   } catch (err) {
     logEntry(`Approve failed: ${err.message}`, 'err');
   }
+}
+
+// Clear the attachment file input and hide the "clear" button.
+function clearAttachment() {
+  const inp = $('attachmentInput');
+  if (inp) inp.value = '';
+  hide('attachClearBtn');
 }
 
 async function onReject() {
@@ -747,6 +763,13 @@ window.addEventListener('DOMContentLoaded', async () => {
   $('approveBtn').addEventListener('click', onApprove);
   $('rejectBtn').addEventListener('click', onReject);
   $('regenerateBtn').addEventListener('click', () => { resetDraftView(); onGenerate(); });
+
+  // Attachment picker: reveal the "clear" button once a file is chosen.
+  $('attachmentInput').addEventListener('change', (e) => {
+    if (e.target.files && e.target.files.length) show('attachClearBtn');
+    else hide('attachClearBtn');
+  });
+  $('attachClearBtn').addEventListener('click', clearAttachment);
 
   $('refreshHistoryBtn').addEventListener('click', loadSendHistory);
 

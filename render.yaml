@@ -64,6 +64,8 @@ services:
         value: "Sent Log"
       - key: GOOGLE_DRIVE_TEMPLATES_FOLDER_ID
         value: "1UX8-1tv2fO683R2Czr2Qa4ILPIrrDj4h"
+      - key: SYNC_INTERVAL_MINUTES
+        value: "60"
 
       # ── Secrets (set in dashboard, never in git) ────────────
       - key: APP_PASSWORD

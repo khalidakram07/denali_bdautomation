@@ -162,6 +162,42 @@ def _build_prompt(opp: dict, contact: dict, sender_name: str) -> str:
 # Template-driven mode (NEW)
 # ─────────────────────────────────────────────────────────────
 
+def _extract_tone_sections() -> str:
+    """
+    Pull the editable TONE & STYLE, PREFERRED WORDS, and BANNED WORDS blocks
+    out of prompts/email_draft.txt so the template-fill path obeys the SAME
+    word rules as the pure-AI path. Returns '' if the file/sections are missing.
+
+    The prompt file structure is:
+        # ═════   (banner)
+        # TONE & STYLE   ← ...   (header)
+        # ═════   (banner)
+        <content lines>
+        # ═════   (banner)
+        # PREFERRED WORDS ...    (header)
+        ...
+    Splitting on the banner lines yields alternating header / content blocks,
+    so when a header block matches, we also take the next block (its content).
+    """
+    try:
+        raw = PROMPT_PATH.read_text(encoding="utf-8")
+    except Exception:
+        return ""
+
+    wanted = ("TONE & STYLE", "PREFERRED WORDS", "BANNED WORDS")
+    blocks = re.split(r"#\s*═{5,}", raw)
+    grabbed: list[str] = []
+    for i, blk in enumerate(blocks):
+        first_line = (blk.strip().splitlines() or [""])[0]
+        if any(w in first_line for w in wanted):
+            # This block is the header; the content is in the NEXT block.
+            header = first_line.split("←")[0].replace("#", "").strip()
+            content = blocks[i + 1].strip() if i + 1 < len(blocks) else ""
+            if content:
+                grabbed.append(f"{header}:\n{content}")
+    return "\n\n".join(grabbed).strip()
+
+
 def _build_template_prompt(template_text: str, vars_dict: dict, opp: dict, contact: dict) -> str:
     """
     Construct the Claude prompt for template-driven generation.
@@ -184,12 +220,16 @@ def _build_template_prompt(template_text: str, vars_dict: dict, opp: dict, conta
         f"at {vars_dict.get('company','')}"
     )
 
+    tone = _extract_tone_sections()
+    tone_block = f"\n\nHOUSE STYLE — the filled-in text MUST obey these:\n{tone}\n" if tone else ""
+
     return f"""You are an outbound BD email assistant for Denali Health (clinical-trial site identification).
 
 A template has been prepared with placeholders already filled in. Your job is to
 fill ONLY the [BRACKETED INSTRUCTIONS] using the source article below. Do NOT
 modify anything outside the brackets - keep the subject line, opening, signoff,
 and all already-substituted text exactly as written.
+{tone_block}
 
 TEMPLATE (placeholders already substituted; replace bracketed instructions):
 \"\"\"
@@ -270,7 +310,6 @@ def generate_draft(
     max_toks = int(os.getenv("ANTHROPIC_MAX_TOKENS", "1024"))
 
     use_fallback = not api_key or "REPLACE" in api_key or api_key in ("xxx", "your-key-here")
-
     if use_fallback:
         log.warning("ANTHROPIC_API_KEY missing/placeholder - using fallback demo draft")
         result = _fallback_draft(opp, contact, sender_name, template_filename)
@@ -286,13 +325,13 @@ def generate_draft(
         prompt_version_used = f"template:{template_filename}"
     else:
         prompt = _build_prompt(opp, contact, sender_name)
-        log.info("Calling Anthropic with prompt-only (model=%s, prompt_len=%d)", model, len(prompt))
+        log.info("Calling Anthropic prompt-only (model=%s, prompt_len=%d)", model, len(prompt))
         result = _call_claude(prompt, api_key, model, max_toks)
         prompt_version_used = PROMPT_VERSION
 
     flags: list[str] = []
     for sig in (result.get("personalization_signals") or []):
-        flags.append(f"📌 {sig}")
+        flags.append(f"\U0001F4CC {sig}")
     for fl in (result.get("quality_flags") or []):
         flags.append(fl)
 

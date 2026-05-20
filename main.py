@@ -26,6 +26,7 @@ from fastapi.staticfiles import StaticFiles
 from database import init_db
 from routers import campaigns, contacts, drafts, opportunities, sync
 from services.auth import BasicAuthMiddleware
+from services import scheduler as sheets_scheduler
 
 # ── Config ──────────────────────────────────────
 load_dotenv()
@@ -51,7 +52,9 @@ async def lifespan(app: FastAPI):
     log.info("Starting Denali BD Automation API (env=%s)", APP_ENV)
     init_db()
     log.info("Database initialised")
+    sheets_scheduler.start()
     yield
+    await sheets_scheduler.stop()
     log.info("Shutting down")
 
 
@@ -122,9 +125,4 @@ if STATIC_DIR.exists():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(
-        "main:app",
-        host=APP_HOST,
-        port=APP_PORT,
-        reload=(APP_ENV == "development"),
-    )
+    uvicorn.run("main:app", host=APP_HOST, port=APP_PORT, reload=(APP_ENV == "development"))

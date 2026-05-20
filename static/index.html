@@ -31,7 +31,7 @@
     <label for="oppSelect">Opportunity</label>
     <select id="oppSelect"><option value="">— none yet —</option></select>
   </div>
-  <button id="syncBtn" class="btn btn-secondary">↻ Sync from Google Sheets</button>
+  <button id="syncBtn" class="btn btn-secondary">↻ Sync Live Data</button>
   <button id="seedBtn" class="btn btn-secondary hidden">Seed demo contacts</button>
   <button id="addContactBtn" class="btn btn-secondary hidden">+ Add real contact</button>
 </div>
@@ -120,7 +120,7 @@
         <div style="display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:20px;flex-wrap:wrap;">
           <span style="font-size:10px;font-family:'DM Mono',monospace;color:var(--ink-soft);text-transform:uppercase;letter-spacing:0.8px;">Template:</span>
           <select id="templateSelect" style="font-size:13px;padding:6px 12px;border:1px solid var(--rule);border-radius:6px;background:var(--white);font-family:inherit;cursor:pointer;min-width:240px;">
-            <option value="">— None (pure AI generation) —</option>
+            <option value="">✨ AI only — no template (writes from Clinwire context)</option>
           </select>
           <button id="refreshTemplatesBtn" type="button" title="Refresh templates from Google Drive"
                   style="font-size:13px;padding:6px 10px;border:1px solid var(--rule);border-radius:6px;background:var(--white);cursor:pointer;font-family:inherit;">↻</button>
@@ -192,6 +192,12 @@
 
           <span style="font-size:10px;font-family:'DM Mono',monospace;color:var(--ink-soft);text-transform:uppercase;letter-spacing:0.8px;">Send to:</span>
           <input id="toEmailInput" type="email" placeholder="recipient@example.com" style="font-size:13px;padding:6px 10px;border:1px solid var(--rule);border-radius:6px;background:var(--white);font-family:'DM Mono',monospace;outline:none;" />
+
+          <span style="font-size:10px;font-family:'DM Mono',monospace;color:var(--ink-soft);text-transform:uppercase;letter-spacing:0.8px;">Attach:</span>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <input id="attachmentInput" type="file" multiple style="font-size:12px;font-family:inherit;flex:1;min-width:0;" />
+            <button id="attachClearBtn" type="button" title="Remove attachment" class="hidden" style="font-size:11px;padding:4px 8px;border:1px solid var(--rule);border-radius:6px;background:var(--white);cursor:pointer;">✕ clear</button>
+          </div>
         </div>
       </div>
       <div class="approval-actions">
