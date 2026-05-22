@@ -46,7 +46,11 @@ def get_connection() -> sqlite3.Connection:
     """
     conn = sqlite3.connect(DATABASE_PATH)
     conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA foreign_keys = ON")
+    # Foreign keys are intentionally left OFF. In the live-Sheets model the
+    # dashboard reflects Google Sheets directly and we no longer persist
+    # opportunities/contacts, so drafts/sends store a self-contained snapshot
+    # (see email_drafts snapshot columns) rather than FK references.
+    conn.execute("PRAGMA foreign_keys = OFF")
     return conn
 
 
@@ -220,6 +224,15 @@ def init_db() -> None:
             "ALTER TABLE email_sends ADD COLUMN recipient_email     TEXT",
             "ALTER TABLE email_sends ADD COLUMN from_mailbox_email  TEXT",
             "ALTER TABLE email_sends ADD COLUMN is_to_overridden    INTEGER NOT NULL DEFAULT 0",
+            # Self-contained snapshot on drafts (live-Sheets model: no opp/contact rows)
+            "ALTER TABLE email_drafts ADD COLUMN category        TEXT",
+            "ALTER TABLE email_drafts ADD COLUMN trial_id        TEXT",
+            "ALTER TABLE email_drafts ADD COLUMN trial_title     TEXT",
+            "ALTER TABLE email_drafts ADD COLUMN sponsor_name    TEXT",
+            "ALTER TABLE email_drafts ADD COLUMN contact_name    TEXT",
+            "ALTER TABLE email_drafts ADD COLUMN contact_title   TEXT",
+            "ALTER TABLE email_drafts ADD COLUMN recipient_email TEXT",
+            "ALTER TABLE email_drafts ADD COLUMN contact_score   INTEGER",
         ]
         for stmt in migrations:
             try:

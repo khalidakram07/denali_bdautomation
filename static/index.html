@@ -24,14 +24,16 @@
 <!-- ── CONTROLS BAR ────────────────────────────── -->
 <div class="controls">
   <div class="control-group">
-    <label for="csvFile">Upload CSV</label>
-    <input type="file" id="csvFile" accept=".csv">
+    <label for="categorySelect">Category</label>
+    <select id="categorySelect"><option value="">— loading… —</option></select>
   </div>
   <div class="control-group">
     <label for="oppSelect">Opportunity</label>
-    <select id="oppSelect"><option value="">— none yet —</option></select>
+    <select id="oppSelect"><option value="">— select a category —</option></select>
   </div>
-  <button id="syncBtn" class="btn btn-secondary">↻ Sync Live Data</button>
+  <button id="syncBtn" class="btn btn-secondary">↻ Refresh from Sheet</button>
+  <!-- Obsolete in the live-Sheets model (kept hidden so legacy handlers don't error) -->
+  <input type="file" id="csvFile" accept=".csv" class="hidden">
   <button id="seedBtn" class="btn btn-secondary hidden">Seed demo contacts</button>
   <button id="addContactBtn" class="btn btn-secondary hidden">+ Add real contact</button>
 </div>

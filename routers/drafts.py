@@ -1,6 +1,12 @@
 """
 routers/drafts.py — AI email drafting + the human approval queue.
 
+Live-Sheets model: opportunities + contacts are NOT persisted. The /generate
+endpoint receives the trial + contact as snapshots read straight from the
+selected category's Google Sheet, generates the email, and stores a
+self-contained draft (snapshot columns) so approval + send history still work
+without any opportunities/contacts rows.
+
 Endpoints:
     GET    /api/drafts/                List drafts (filter by approval_status)
     POST   /api/drafts/generate        Generate a new draft via Anthropic
@@ -61,12 +67,9 @@ def list_drafts(
 ):
     sql = """
         SELECT  d.*,
-                o.trial_title                       AS opportunity_title,
-                c.first_name || ' ' || c.last_name  AS contact_name,
-                c.contact_score                     AS contact_score
+                COALESCE(d.trial_title, '')  AS opportunity_title,
+                COALESCE(d.contact_name, '') AS contact_name
         FROM    email_drafts d
-        JOIN    opportunities o ON o.id = d.opportunity_id
-        JOIN    contacts      c ON c.id = d.contact_id
     """
     params: list = []
     if approval_status:
@@ -88,28 +91,32 @@ def list_drafts(
 
 @router.post("/generate", status_code=status.HTTP_201_CREATED, response_model=DraftRead)
 def generate(req: DraftGenerateRequest):
-    with db_cursor() as cur:
-        cur.execute("SELECT * FROM opportunities WHERE id = ?", (req.opportunity_id,))
-        opp_row = cur.fetchone()
-        if not opp_row:
-            raise HTTPException(404, f"Opportunity {req.opportunity_id} not found")
-        cur.execute("SELECT * FROM contacts WHERE id = ?", (req.contact_id,))
-        contact_row = cur.fetchone()
-        if not contact_row:
-            raise HTTPException(404, f"Contact {req.contact_id} not found")
-        if contact_row["opportunity_id"] != req.opportunity_id:
-            raise HTTPException(400, "Contact does not belong to this opportunity")
+    opp = dict(req.opportunity or {})
+    contact = dict(req.contact or {})
+    if not opp:
+        raise HTTPException(400, "Missing opportunity data")
+    if not contact:
+        raise HTTPException(400, "Missing contact data")
 
-    opp = dict(opp_row)
-    contact = dict(contact_row)
-    if contact.get("score_reasoning"):
-        try:
-            contact["score_reasoning"] = json.loads(contact["score_reasoning"])
-        except (json.JSONDecodeError, TypeError):
-            contact["score_reasoning"] = None
+    # Sentinel ids: ai_engine echoes opp['id']/contact['id'] into DraftCreate
+    # (typed int). We store a snapshot instead of FK references.
+    opp["id"] = 0
+    contact["id"] = 0
+
+    # The template path looks for the trial's Full Text under raw_data["Full Text"].
+    if not opp.get("raw_data"):
+        opp["raw_data"] = {
+            "Title":      opp.get("trial_title"),
+            "Company":    opp.get("sponsor_name"),
+            "Drugs":      opp.get("drug"),
+            "Conditions": opp.get("indication"),
+            "Trial IDs":  opp.get("trial_id") or opp.get("nct_number"),
+            "Phase":      opp.get("phase"),
+            "Source URL": opp.get("source_url"),
+            "Full Text":  opp.get("full_text"),
+        }
 
     sender_name = os.getenv("DEFAULT_SENDER_NAME", "Maryam")
-
     try:
         draft = generate_draft(
             opp, contact,
@@ -117,30 +124,44 @@ def generate(req: DraftGenerateRequest):
             template_filename=req.template_filename,
         )
     except Exception as e:
-        log.exception("AI generation failed for opp=%s contact=%s template=%s",
-                      req.opportunity_id, req.contact_id, req.template_filename)
+        log.exception("AI generation failed (category=%s trial=%s)",
+                      opp.get("category"), opp.get("trial_id"))
         raise HTTPException(502, f"AI generation failed: {e}")
+
+    first = (contact.get("first_name") or "").strip()
+    last  = (contact.get("last_name") or "").strip()
+    contact_name = contact.get("full_name") or (f"{first} {last}".strip()) or None
+
+    snap = {
+        "category":        opp.get("category"),
+        "trial_id":        opp.get("trial_id") or opp.get("nct_number"),
+        "trial_title":     opp.get("trial_title"),
+        "sponsor_name":    opp.get("sponsor_name"),
+        "contact_name":    contact_name,
+        "contact_title":   contact.get("title"),
+        "recipient_email": contact.get("email"),
+        "contact_score":   contact.get("contact_score"),
+    }
 
     with db_cursor() as cur:
         cur.execute(
             """
             INSERT INTO email_drafts
                 (opportunity_id, contact_id, sequence_step, subject_line, body_text,
-                 prompt_version, quality_flags, approval_status)
-            VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')
+                 prompt_version, quality_flags, approval_status,
+                 category, trial_id, trial_title, sponsor_name,
+                 contact_name, contact_title, recipient_email, contact_score)
+            VALUES (0, 0, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
-                draft.opportunity_id, draft.contact_id, draft.sequence_step,
-                draft.subject_line, draft.body_text,
+                draft.sequence_step, draft.subject_line, draft.body_text,
                 draft.prompt_version,
                 json.dumps(draft.quality_flags) if draft.quality_flags else None,
+                snap["category"], snap["trial_id"], snap["trial_title"], snap["sponsor_name"],
+                snap["contact_name"], snap["contact_title"], snap["recipient_email"], snap["contact_score"],
             ),
         )
         draft_id = cur.lastrowid
-        cur.execute(
-            "UPDATE opportunities SET status='drafted' WHERE id = ? AND status IN ('new','enriched')",
-            (req.opportunity_id,),
-        )
         cur.execute("SELECT * FROM email_drafts WHERE id = ?", (draft_id,))
         new_row = cur.fetchone()
 
@@ -150,8 +171,9 @@ def generate(req: DraftGenerateRequest):
         actor_id=os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-6"),
         metadata={
             "prompt_version": PROMPT_VERSION,
-            "opportunity_id": req.opportunity_id,
-            "contact_id": req.contact_id,
+            "category": snap["category"],
+            "trial_id": snap["trial_id"],
+            "contact":  snap["contact_name"],
         },
     )
     return _row_to_draft(new_row)
@@ -189,16 +211,15 @@ async def approve_draft(
     Approve a pending draft. If `from_mailbox` is provided, also send the email
     via that Gmail mailbox and log a row in email_sends.
 
-    Accepts multipart/form-data so Maryam can attach one or more files from her
-    computer at send time (repeat the `attachments` field for each file).
+    Accepts multipart/form-data so one or more files can be attached at send time.
+    The recipient comes from the draft's snapshot (recipient_email) unless overridden.
     """
-    # Normalise empty-string form fields to None
     edited_body       = (edited_body or "").strip() or None
     edited_subject    = (edited_subject or "").strip() or None
     from_mailbox      = (from_mailbox or "").strip() or None
     to_email_override = (to_email_override or "").strip() or None
 
-    # Read each uploaded attachment into memory as a (filename, bytes) tuple
+    # Read uploaded attachments into memory as (filename, bytes)
     attachment_files: list[tuple[str, bytes]] = []
     attachment_names: list[str] = []
     for up in attachments or []:
@@ -210,16 +231,11 @@ async def approve_draft(
             attachment_files.append((up.filename, data))
     attachment_label = ", ".join(attachment_names) if attachment_names else None
 
-    # 1. Validate + load
+    # 1. Validate + load (recipient comes from the draft snapshot)
     with db_cursor() as cur:
         cur.execute(
-            """
-            SELECT d.*, c.email AS contact_email, c.first_name AS contact_first_name,
-                   c.last_name AS contact_last_name
-            FROM email_drafts d
-            JOIN contacts c ON c.id = d.contact_id
-            WHERE d.id = ?
-            """,
+            "SELECT d.*, d.recipient_email AS contact_email "
+            "FROM email_drafts d WHERE d.id = ?",
             (draft_id,),
         )
         row = cur.fetchone()
@@ -266,10 +282,9 @@ async def approve_draft(
     # 4. Send the email if a mailbox was chosen
     send_info = None
     if chosen_mb:
-        # Resolve recipient: override first, else contact's stored email
         final_to = (to_email_override or draft_data.get("contact_email") or "").strip()
         if not final_to:
-            raise HTTPException(400, "No recipient address — set one on the contact or pass to_email_override.")
+            raise HTTPException(400, "No recipient address — this lead has no email; pass to_email_override.")
 
         final_subject = edited_subject or draft_data["subject_line"]
         final_body    = edited_body    or draft_data["body_text"]
@@ -286,13 +301,10 @@ async def approve_draft(
             )
         except Exception as e:
             log.exception("Send failed for draft %s", draft_id)
-            # Insert a failed send row so we have an audit trail
             with db_cursor() as cur:
                 cur.execute(
-                    """
-                    INSERT INTO email_sends (draft_id, send_status, message_id)
-                    VALUES (?, 'failed', ?)
-                    """,
+                    "INSERT INTO email_sends (draft_id, send_status, message_id) "
+                    "VALUES (?, 'failed', ?)",
                     (draft_id, f"error: {str(e)[:200]}"),
                 )
             log_activity(
@@ -302,7 +314,6 @@ async def approve_draft(
             )
             raise HTTPException(502, f"Email approved but send failed: {e}")
 
-        # 5. Insert email_sends row
         with db_cursor() as cur:
             cur.execute(
                 """
@@ -321,11 +332,6 @@ async def approve_draft(
                 ),
             )
             send_id = cur.lastrowid
-            # Bump opportunity status
-            cur.execute(
-                "UPDATE opportunities SET status='sent' WHERE id = ? AND status IN ('drafted','enriched','new')",
-                (draft_data["opportunity_id"],),
-            )
 
         log_activity(
             "send", send_id, "sent",
@@ -336,6 +342,8 @@ async def approve_draft(
                 "to_overridden": bool(to_email_override),
                 "dry_run":    result.dry_run,
                 "message_id": result.message_id,
+                "category":   draft_data.get("category"),
+                "trial":      draft_data.get("trial_title"),
                 "attachments": attachment_names,
                 "attachment_count": result.attachment_count,
             },
@@ -353,7 +361,7 @@ async def approve_draft(
             "attachment_count": result.attachment_count,
         }
 
-    # 6. Return the updated draft + send info
+    # 5. Return the updated draft + send info
     with db_cursor() as cur:
         cur.execute("SELECT * FROM email_drafts WHERE id = ?", (draft_id,))
         new_row = cur.fetchone()

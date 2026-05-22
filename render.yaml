@@ -64,6 +64,13 @@ services:
         value: "Sent Log"
       - key: GOOGLE_DRIVE_TEMPLATES_FOLDER_ID
         value: "1UX8-1tv2fO683R2Czr2Qa4ILPIrrDj4h"
+      # ── Live category leads (LeadsCategory Drive folder → one subfolder per category) ──
+      - key: LEADS_CATEGORY_FOLDER_ID
+        value: "1rBfcP7CC7UwY__95vdmTu6FwmwQUqHav"
+      - key: SHEETS_TAB_CLINWIRE
+        value: "Clinwire"
+      - key: SHEETS_TAB_LEADS
+        value: "Leads"
       - key: SYNC_INTERVAL_MINUTES
         value: "60"
 

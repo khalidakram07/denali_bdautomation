@@ -159,16 +159,14 @@ def sent_history(
             d.body_text              AS body,
             d.approved_by,
             d.approved_at,
-            d.opportunity_id,
-            o.trial_title            AS opportunity_title,
-            d.contact_id,
-            c.first_name || ' ' || c.last_name AS contact_name,
-            c.email                  AS contact_stored_email,
-            c.title                  AS contact_title
+            d.category,
+            d.trial_id,
+            d.trial_title            AS opportunity_title,
+            d.contact_name           AS contact_name,
+            d.recipient_email        AS contact_stored_email,
+            d.contact_title          AS contact_title
         FROM email_sends s
-        JOIN email_drafts  d ON d.id = s.draft_id
-        JOIN opportunities o ON o.id = d.opportunity_id
-        JOIN contacts      c ON c.id = d.contact_id
+        JOIN email_drafts d ON d.id = s.draft_id
     """
     params: list = []
     where = []

@@ -24,7 +24,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from database import init_db
-from routers import campaigns, contacts, drafts, opportunities, sync
+from routers import campaigns, contacts, drafts, leads, opportunities, sync
 from services.auth import BasicAuthMiddleware
 from services import scheduler as sheets_scheduler
 
@@ -93,6 +93,7 @@ app.include_router(contacts.router,      prefix="/api/contacts",      tags=["con
 app.include_router(drafts.router,        prefix="/api/drafts",        tags=["drafts"])
 app.include_router(campaigns.router,     prefix="/api/campaigns",     tags=["campaigns"])
 app.include_router(sync.router,          prefix="/api/sync",          tags=["sync"])
+app.include_router(leads.router,         prefix="/api/leads",         tags=["leads"])
 
 
 # ── Health check ────────────────────────────────

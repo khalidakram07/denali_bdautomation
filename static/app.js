@@ -29,6 +29,8 @@ const API = {
 
 // ── App state ────────────────────────────────────
 const state = {
+  category: null,
+  opps: [],
   oppId: null,
   opp: null,
   contacts: [],
@@ -93,35 +95,70 @@ async function pollLog() {
 }
 
 // ── Opportunity loader ───────────────────────────
-async function refreshOpportunityList() {
-  const opps = await API.get('/api/opportunities/?limit=50');
-  const sel = $('oppSelect');
-  clear(sel);
-  if (opps.length === 0) {
-    sel.appendChild(new Option('— upload a CSV first —', ''));
-    show('emptyState');
-    hide('mainShell');
+async function loadCategories() {
+  let data;
+  try {
+    data = await API.get('/api/leads/categories');
+  } catch (err) {
+    logEntry(`Could not load categories: ${err.message}`, 'err');
+    show('emptyState'); hide('mainShell');
     return;
   }
-  hide('emptyState');
-  show('mainShell');
-  opps.forEach(o => {
-    const opt = new Option(`#${o.id} · ${o.trial_title.slice(0, 60)} (${o.status})`, o.id);
-    sel.appendChild(opt);
-  });
-  // Pick the currently-selected one if still present, else first
-  if (state.oppId && opps.some(o => o.id === state.oppId)) {
-    sel.value = state.oppId;
-  } else {
-    sel.value = opps[0].id;
-    state.oppId = opps[0].id;
+  const cats = data.categories || [];
+  const sel = $('categorySelect');
+  clear(sel);
+  if (cats.length === 0) {
+    sel.appendChild(new Option('— no categories found —', ''));
+    show('emptyState'); hide('mainShell');
+    logEntry('No categories found in the LeadsCategory Drive folder', 'sys');
+    return;
   }
-  await loadOpportunity(state.oppId);
+  cats.forEach(c => sel.appendChild(new Option(c.name, c.name)));
+  const saved = localStorage.getItem('denali.category');
+  sel.value = (saved && cats.some(c => c.name === saved)) ? saved : cats[0].name;
+  state.category = sel.value;
+  await loadCategoryData();
 }
 
-async function loadOpportunity(oppId) {
-  state.oppId = parseInt(oppId, 10);
-  const opp = await API.get(`/api/opportunities/${oppId}`);
+async function loadCategoryData(forceRefresh = false) {
+  if (!state.category) return;
+  localStorage.setItem('denali.category', state.category);
+  const sel = $('oppSelect');
+  clear(sel);
+  sel.appendChild(new Option('— loading… —', ''));
+  let payload;
+  try {
+    const path = `/api/leads/category/${encodeURIComponent(state.category)}${forceRefresh ? '?refresh=true' : ''}`;
+    payload = await API.get(path);
+  } catch (err) {
+    logEntry(`Could not load "${state.category}": ${err.message}`, 'err');
+    show('emptyState'); hide('mainShell');
+    return;
+  }
+  state.opps = payload.opportunities || [];
+  logEntry(`Loaded ${state.opps.length} trials · ${payload.contact_count} contacts for ${state.category}`, 'ok');
+  clear(sel);
+  if (state.opps.length === 0) {
+    sel.appendChild(new Option('— no trials in this category —', ''));
+    show('emptyState'); hide('mainShell');
+    return;
+  }
+  hide('emptyState'); show('mainShell');
+  state.opps.forEach(o => {
+    const n = o.contacts ? o.contacts.length : 0;
+    const who = o.sponsor_name || '(unknown sponsor)';
+    const title = (o.trial_title && o.trial_title !== who) ? ` — ${o.trial_title}` : '';
+    const label = `${who}${title} · ${n} contact${n === 1 ? '' : 's'}`;
+    sel.appendChild(new Option(label.length > 95 ? label.slice(0, 95) + '…' : label, o.id));
+  });
+  sel.value = state.opps[0].id;
+  loadOpportunity(state.opps[0].id);
+}
+
+function loadOpportunity(oppId) {
+  const opp = state.opps.find(o => String(o.id) === String(oppId));
+  if (!opp) return;
+  state.oppId = opp.id;
   state.opp = opp;
   state.contacts = opp.contacts || [];
   state.primaryContact = state.contacts.find(c => c.is_primary) || state.contacts[0] || null;
@@ -131,21 +168,13 @@ async function loadOpportunity(oppId) {
   renderOtherContacts(state.contacts.filter(c => c !== state.primaryContact));
   resetDraftView();
 
-  // Both buttons visible whenever an opportunity is loaded — let user choose
-  show('addContactBtn');
-  show('seedBtn');
-
   if (state.contacts.length === 0) {
     $('contactBody').innerHTML = `<div style="padding:16px;color:var(--amber);font-size:13px;background:var(--amber-light);border:1px solid #fed7aa;border-radius:8px;margin:4px;">
-      <strong>No contacts on this opportunity yet.</strong><br>
-      <span style="font-size:12px;color:var(--ink-mid);display:block;margin-top:8px;">
-        Two options at the top of the page:<br>
-        • <strong>"+ Add real contact"</strong> — type in a real person (LinkedIn / Apollo lookup)<br>
-        • <strong>"Seed demo contacts"</strong> — generates 3 placeholder contacts for testing the flow
-      </span>
+      <strong>No decision-maker contacts on this trial.</strong><br>
+      <span style="font-size:12px;color:var(--ink-mid);display:block;margin-top:8px;">Pick another trial from the Opportunity dropdown.</span>
     </div>`;
     $('generateBtn').disabled = true;
-    $('generateBtn').title = 'Add a contact first (real or demo)';
+    $('generateBtn').title = 'No contact to email on this trial';
   } else {
     $('generateBtn').disabled = false;
     $('generateBtn').title = '';
@@ -153,25 +182,39 @@ async function loadOpportunity(oppId) {
 }
 
 // ── Renderers ────────────────────────────────────
+function renderLiveSource(o) {
+  const parts = [];
+  if (o.source_url) parts.push(['Source URL', o.source_url]);
+  if (o.full_text)  parts.push(['Full Text', o.full_text]);
+  if (parts.length === 0) return '';
+  const rows = parts.map(([k, v]) => {
+    if (/^\s*https?:\/\//.test(String(v))) {
+      return `<div class="raw-row"><span class="key">${escapeHtml(k)}</span><span class="val"><a href="${escapeHtml(v)}" target="_blank" rel="noopener">${escapeHtml(v)}</a></span></div>`;
+    }
+    return `<div class="raw-row"><span class="key">${escapeHtml(k)}</span><span class="val fulltext">${escapeHtml(v)}</span></div>`;
+  }).join('');
+  return `<div class="raw-data"><div class="raw-data-toggle"><span class="arrow">▶</span> Source data · ${parts.length} field${parts.length === 1 ? '' : 's'} from Clinwire</div><div class="raw-data-body">${rows}</div></div>`;
+}
+
 function renderOpportunity(o) {
-  $('oppDate').textContent = fmtDate(o.created_at);
+  $('oppDate').textContent = o.category || '';
+  const synthTag = o.synthetic ? ' · from leads' : '';
   $('oppBody').innerHTML = `
     <div class="source-tag">
       <svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor"><circle cx="8" cy="8" r="6"/></svg>
-      ${escapeHtml((o.source || 'clinwire').toUpperCase())} Feed
+      ${escapeHtml((o.category || 'Clinwire').toUpperCase())} Feed${synthTag}
     </div>
-    <div class="opp-name">${escapeHtml(o.trial_title)}</div>
+    <div class="opp-name">${escapeHtml(o.trial_title || '')}</div>
     <div class="opp-sub">${escapeHtml(o.sponsor_name || '')}</div>
     <div class="opp-grid">
-      ${field('Phase',          o.phase)}
-      ${field('Indication',     o.indication)}
-      ${field('Sites needed',   o.sites_needed != null ? o.sites_needed + '+' : '—')}
-      ${field('Geography',      o.geography)}
-      ${field('CRO',            o.cro_name, true)}
+      ${field('Phase',            o.phase)}
+      ${field('Indication',       o.indication)}
+      ${field('Drug',             o.drug)}
+      ${field('Geography',        o.geography)}
+      ${field('Trial ID',         o.trial_id, true)}
       ${field('Therapeutic Area', o.therapeutic_area, true)}
-      ${field('Protocol Start', fmtDate(o.protocol_start), true)}
     </div>
-    ${renderRawData(o.raw_data)}
+    ${renderLiveSource(o)}
   `;
 
   // Wire the raw-data toggle (re-attached every render since we rebuild HTML)
@@ -236,46 +279,46 @@ function renderContact(c) {
     return;
   }
   $('contactConfidence').style.display = '';
-  // Pre-fill the "To:" override field with the contact's stored email
+  // Pre-fill the "To:" override field with the contact's email
   $('toEmailInput').value = c.email || '';
-  const sr = c.score_reasoning || {};
-  const initials = ((c.first_name || '?')[0] + (c.last_name || '?')[0]).toUpperCase();
+  const fullName = c.full_name || ((c.first_name || '') + ' ' + (c.last_name || '')).trim();
+  const initials = ((c.first_name || c.full_name || '?')[0] + ((c.last_name || ' ')[0] || ' ')).toUpperCase();
   const score = c.contact_score ?? 0;
+  const rank = c.priority_rank ? `Priority #${c.priority_rank}` : 'Decision-maker for outreach';
+  const verified = !!c.email_verified || /verif/i.test(c.email_status || '');
 
   $('contactBody').innerHTML = `
     <div class="contact-row">
       <div class="avatar">${escapeHtml(initials)}</div>
       <div>
-        <div class="contact-name">${escapeHtml((c.first_name || '') + ' ' + (c.last_name || ''))}</div>
+        <div class="contact-name">${escapeHtml(fullName)}</div>
         <div class="contact-title">${escapeHtml(c.title || '')}</div>
-        <div class="contact-co">${escapeHtml(state.opp?.cro_name || state.opp?.sponsor_name || '')}</div>
+        <div class="contact-co">${escapeHtml(c.company || state.opp?.sponsor_name || '')}</div>
       </div>
     </div>
     <div class="score-row">
       <div>
-        <div class="score-label">Relevance Score</div>
-        <div style="font-size:12px;color:#15803d;margin-top:3px;">Best match for site selection outreach</div>
+        <div class="score-label">Priority Score</div>
+        <div style="font-size:12px;color:#15803d;margin-top:3px;">${escapeHtml(rank)}</div>
       </div>
       <div style="text-align:right;">
         <div class="score-val">${score}</div>
         <div class="score-sub">out of 100</div>
       </div>
     </div>
-    ${scoreBar('Title relevance', sr.title_relevance, 35)}
-    ${scoreBar('Seniority',       sr.seniority,       25)}
-    ${scoreBar('Department match', sr.department,    20)}
-    ${scoreBar('Geography fit',   sr.geography,      10)}
-    ${scoreBar('Email verified',  sr.email_verified, 10)}
-    ${sr.rationale ? `
+    ${c.notes ? `
       <div class="ai-reasoning">
-        <div class="ai-reasoning-label">Scoring rationale</div>
-        ${escapeHtml(sr.rationale)}
+        <div class="ai-reasoning-label">Outreach notes</div>
+        ${escapeHtml(c.notes)}
       </div>
     ` : ''}
     <div class="contact-meta">
       ${c.email ? `<span class="meta-chip">${escapeHtml(c.email)}</span>` : ''}
       ${c.geography ? `<span class="meta-chip">${escapeHtml(c.geography)}</span>` : ''}
-      <span class="meta-chip">${c.email_verified ? '✓ verified' : '⚠ unverified'}</span>
+      ${c.phone ? `<span class="meta-chip">${escapeHtml(c.phone)}</span>` : ''}
+      <span class="meta-chip">${verified ? '✓ ' + escapeHtml(c.email_status || 'verified') : '⚠ ' + escapeHtml(c.email_status || 'unverified')}</span>
+      ${c.linkedin_url ? `<a class="meta-chip" href="${escapeHtml(c.linkedin_url)}" target="_blank" rel="noopener">LinkedIn ↗</a>` : ''}
+      ${c.apollo_url ? `<a class="meta-chip" href="${escapeHtml(c.apollo_url)}" target="_blank" rel="noopener">Apollo ↗</a>` : ''}
     </div>
   `;
 }
@@ -315,8 +358,8 @@ function renderOtherContacts(others) {
     `).join('');
   el.querySelectorAll('.contact-mini').forEach(el => {
     el.addEventListener('click', () => {
-      const cid = parseInt(el.dataset.cid, 10);
-      const newPrimary = state.contacts.find(c => c.id === cid);
+      const cid = el.dataset.cid;
+      const newPrimary = state.contacts.find(c => String(c.id) === String(cid));
       if (newPrimary) {
         const old = state.primaryContact;
         state.primaryContact = newPrimary;
@@ -407,7 +450,7 @@ async function onUpload(e) {
     const res = await API.post('/api/opportunities/upload', fd, true);
     logEntry(`Uploaded: ${res.inserted} new, ${res.duplicates} duplicates, ${res.skipped} skipped`, 'ok');
     e.target.value = '';
-    await refreshOpportunityList();
+    await loadCategoryData(true);
   } catch (err) {
     logEntry(`Upload failed: ${err.message}`, 'err');
   }
@@ -417,19 +460,13 @@ async function onSyncSheets() {
   const btn = $('syncBtn');
   btn.disabled = true;
   const original = btn.textContent;
-  btn.textContent = '↻ Syncing...';
+  btn.textContent = '↻ Refreshing...';
   try {
-    const res = await API.post('/api/sync/sheets', {});
-    const opp = res.opportunities || {};
-    const c = res.contacts || {};
-    logEntry(
-      `Sync done in ${res.elapsed_seconds}s · opps: ${opp.inserted} new / ${opp.duplicates} dup · ` +
-      `contacts: ${c.inserted} inserted / ${c.skipped_no_opp} skipped (no opp match)`,
-      'ok'
-    );
-    await refreshOpportunityList();
+    await API.post('/api/leads/refresh', {});
+    await loadCategoryData(true);
+    logEntry(`Refreshed "${state.category}" from Google Sheet`, 'ok');
   } catch (err) {
-    logEntry(`Sheet sync failed: ${err.message}`, 'err');
+    logEntry(`Refresh failed: ${err.message}`, 'err');
   } finally {
     btn.disabled = false;
     btn.textContent = original;
@@ -496,7 +533,7 @@ async function onSubmitContact() {
 }
 
 async function onGenerate() {
-  if (!state.oppId || !state.primaryContact) {
+  if (!state.opp || !state.primaryContact) {
     logEntry('Cannot generate: need an opportunity + contact', 'err');
     return;
   }
@@ -508,8 +545,8 @@ async function onGenerate() {
   }
   try {
     const draft = await API.post('/api/drafts/generate', {
-      opportunity_id: state.oppId,
-      contact_id: state.primaryContact.id,
+      opportunity: state.opp,
+      contact: state.primaryContact,
       template_filename: templateFilename,
     });
     renderDraft(draft);
@@ -736,6 +773,7 @@ async function onReject() {
 // ── Init ─────────────────────────────────────────
 window.addEventListener('DOMContentLoaded', async () => {
   $('csvFile').addEventListener('change', onUpload);
+  $('categorySelect').addEventListener('change', e => { state.category = e.target.value; loadCategoryData(); });
   $('oppSelect').addEventListener('change', e => loadOpportunity(e.target.value));
   $('syncBtn').addEventListener('click', onSyncSheets);
   $('refreshTemplatesBtn').addEventListener('click', async () => {
@@ -776,7 +814,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   logEntry('Session started', 'sys');
   await loadMailboxes();
   await loadTemplates();
-  await refreshOpportunityList();
+  await loadCategories();
   await loadSendHistory();
   await pollLog();
   state.logPollInterval = setInterval(pollLog, 2000);

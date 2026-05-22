@@ -193,14 +193,20 @@ class DraftReject(BaseModel):
 
 
 class DraftGenerateRequest(BaseModel):
-    """POST /drafts/generate body — kicks off AI generation for a contact."""
-    opportunity_id: int
-    contact_id:     int
+    """
+    POST /drafts/generate body — kicks off AI generation for a contact.
+
+    Live-Sheets model: the opportunity + contact are sent as snapshots read
+    straight from the selected category's Google Sheet (nothing is persisted in
+    the DB), not as DB row IDs.
+    """
+    opportunity: dict
+    contact:     dict
     sequence_step:  int = Field(default=1, ge=1, le=4)
     template_filename: Optional[str] = Field(
         default=None,
-        description="Filename of a .docx in templates/. If set, AI fills in the template's "
-                    "[BRACKETED] instructions using the Clinwire Full Text as context. "
+        description="Filename of a .docx template. If set, AI fills the template's "
+                    "[BRACKETED] instructions using the trial's Full Text as context. "
                     "If omitted, uses the default prompt-only generation.",
     )
 
