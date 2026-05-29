@@ -340,8 +340,10 @@ def list_categories(force_refresh: bool = False) -> list[dict]:
     drive = _drive_client()
     q = (f"'{LEADS_CATEGORY_FOLDER_ID}' in parents and trashed=false "
          f"and mimeType='{MIME_FOLDER}'")
-    res = drive.files().list(q=q, fields="files(id,name)", pageSize=200,
-                             orderBy="name").execute()
+    res = drive.files().list(
+        q=q, fields="files(id,name)", pageSize=200, orderBy="name",
+        includeItemsFromAllDrives=True, supportsAllDrives=True,
+    ).execute()
     folders = res.get("files", [])
 
     items: list[dict] = []
@@ -360,7 +362,10 @@ def list_categories(force_refresh: bool = False) -> list[dict]:
 def _find_category_sheet_id(drive, folder_id: str, category_name: str) -> Optional[str]:
     """Find the Google Sheet inside a category subfolder. Prefer one whose name matches the category."""
     q = f"'{folder_id}' in parents and trashed=false and mimeType='{MIME_SHEET}'"
-    res = drive.files().list(q=q, fields="files(id,name)", pageSize=50).execute()
+    res = drive.files().list(
+        q=q, fields="files(id,name)", pageSize=50,
+        includeItemsFromAllDrives=True, supportsAllDrives=True,
+    ).execute()
     sheets = res.get("files", [])
     if not sheets:
         return None

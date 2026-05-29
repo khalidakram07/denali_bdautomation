@@ -75,6 +75,8 @@ def list_drive_templates(force_refresh: bool = False) -> list[dict]:
             q=q,
             fields="files(id, name, mimeType, modifiedTime)",
             pageSize=200,
+            includeItemsFromAllDrives=True,
+            supportsAllDrives=True,
         ).execute()
         files = result.get("files", [])
     except HttpError as e:
@@ -119,7 +121,7 @@ def fetch_drive_template_bytes(drive_id: str, mime_type: str) -> Optional[bytes]
         if mime_type == MIME_GDOC:
             data = drive.files().export(fileId=drive_id, mimeType=MIME_DOCX).execute()
         else:
-            data = drive.files().get_media(fileId=drive_id).execute()
+            data = drive.files().get_media(fileId=drive_id, supportsAllDrives=True).execute()
         return data
     except HttpError as e:
         log.error("Drive download failed for %s: %s", drive_id, e)

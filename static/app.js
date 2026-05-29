@@ -30,6 +30,7 @@ const API = {
 // ── App state ────────────────────────────────────
 const state = {
   category: null,
+  subcategory: '',
   opps: [],
   oppId: null,
   opp: null,
@@ -137,22 +138,57 @@ async function loadCategoryData(forceRefresh = false) {
   }
   state.opps = payload.opportunities || [];
   logEntry(`Loaded ${state.opps.length} trials · ${payload.contact_count} contacts for ${state.category}`, 'ok');
+  populateSubcategories();
+  renderOpportunityDropdown();
+}
+
+// ── Subcategory (Conditions filter) ─────────────────
+function splitConditions(s) {
+  if (!s) return [];
+  return String(s).split(/[;|]/).map(x => x.trim()).filter(Boolean);
+}
+
+function populateSubcategories() {
+  const sel = $('subcategorySelect');
   clear(sel);
-  if (state.opps.length === 0) {
-    sel.appendChild(new Option('— no trials in this category —', ''));
+  sel.appendChild(new Option('— all conditions —', ''));
+  const set = new Set();
+  state.opps.forEach(o => splitConditions(o.indication).forEach(c => set.add(c)));
+  [...set].sort((a, b) => a.localeCompare(b)).forEach(c => sel.appendChild(new Option(c, c)));
+  const saved = localStorage.getItem(`denali.subcategory.${state.category}`);
+  if (saved && [...sel.options].some(o => o.value === saved)) {
+    sel.value = saved;
+  } else {
+    sel.value = '';
+  }
+  state.subcategory = sel.value;
+}
+
+function filteredOpps() {
+  if (!state.subcategory) return state.opps;
+  const t = state.subcategory.toLowerCase();
+  return state.opps.filter(o => splitConditions(o.indication).some(c => c.toLowerCase() === t));
+}
+
+function renderOpportunityDropdown() {
+  const sel = $('oppSelect');
+  clear(sel);
+  const opps = filteredOpps();
+  if (opps.length === 0) {
+    sel.appendChild(new Option('— no trials for this filter —', ''));
     show('emptyState'); hide('mainShell');
     return;
   }
   hide('emptyState'); show('mainShell');
-  state.opps.forEach(o => {
+  opps.forEach(o => {
     const n = o.contacts ? o.contacts.length : 0;
     const who = o.sponsor_name || '(unknown sponsor)';
     const title = (o.trial_title && o.trial_title !== who) ? ` — ${o.trial_title}` : '';
     const label = `${who}${title} · ${n} contact${n === 1 ? '' : 's'}`;
     sel.appendChild(new Option(label.length > 95 ? label.slice(0, 95) + '…' : label, o.id));
   });
-  sel.value = state.opps[0].id;
-  loadOpportunity(state.opps[0].id);
+  sel.value = opps[0].id;
+  loadOpportunity(opps[0].id);
 }
 
 function loadOpportunity(oppId) {
@@ -774,6 +810,7 @@ async function onReject() {
 window.addEventListener('DOMContentLoaded', async () => {
   $('csvFile').addEventListener('change', onUpload);
   $('categorySelect').addEventListener('change', e => { state.category = e.target.value; loadCategoryData(); });
+  $('subcategorySelect').addEventListener('change', e => { state.subcategory = e.target.value; localStorage.setItem(`denali.subcategory.${state.category}`, state.subcategory); renderOpportunityDropdown(); });
   $('oppSelect').addEventListener('change', e => loadOpportunity(e.target.value));
   $('syncBtn').addEventListener('click', onSyncSheets);
   $('refreshTemplatesBtn').addEventListener('click', async () => {
