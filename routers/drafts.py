@@ -333,6 +333,29 @@ async def approve_draft(
             )
             send_id = cur.lastrowid
 
+        # Write back to the Google Sheet: mark this lead as emailed so it
+        # disappears from the dropdown on the next read, and bust the cache.
+        try:
+            from services.google_sheets import mark_lead_sent
+            from services import leads_categories as lc
+            cat = draft_data.get("category")
+            tid = draft_data.get("trial_id")
+            if cat and tid:
+                cats = lc.list_categories()
+                sheet_id = next((c["sheet_id"] for c in cats if c["name"] == cat), None)
+                if sheet_id:
+                    sent_at_iso = datetime.utcnow().isoformat(timespec="seconds")
+                    marked = mark_lead_sent(sheet_id, tid, final_to, sent_at_iso)
+                    log.info("mark_lead_sent for %s in %s -> %s", final_to, cat, marked)
+                    if save_recipient_email and final_to and draft_data.get("contact_name"):
+                        from services.google_sheets import update_lead_field
+                        saved = update_lead_field(sheet_id, tid, draft_data["contact_name"],
+                                                  "Business Email", final_to)
+                        log.info("update_lead_field email for %s -> %s", draft_data["contact_name"], saved)
+                lc._category_data_cache.pop(cat, None)   # next read sees the new state
+        except Exception as e:
+            log.exception("mark_lead_sent failed (email still sent successfully): %s", e)
+
         log_activity(
             "send", send_id, "sent",
             actor_type="system",

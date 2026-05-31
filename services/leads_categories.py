@@ -179,6 +179,7 @@ def map_lead_row(row: dict, category: str) -> Optional[dict]:
         "linkedin_url":        g("LinkedIn URL"),
         "apollo_url":          g("Apollo Profile URL"),
         "notes":               g("Outreach Notes"),
+        "last_sent":           g("Last Sent"),
         "priority_rank":       rank,
         "is_primary":          (rank == 1),
         "contact_score":       _priority_to_score(g("Priority Score")),
@@ -248,17 +249,13 @@ def build_category_view(clin_rows: list[dict], lead_rows: list[dict], category: 
       - duplicate people (same email) are collapsed
     Opportunities with the strongest contacts surface first.
     """
-    # 1. Map + dedupe opportunities by Trial ID
+    # 1. Map every Clinwire row to its own opportunity (each event = unique entry,
+    #    relying on the Trial IDs being unique per row).
     opps: list[dict] = []
-    seen_trials: dict[str, dict] = {}
     for r in clin_rows:
         o = map_clinwire_row(r, category)
         if not o:
             continue
-        key = o["trial_id"] or o["id"]
-        if key in seen_trials:
-            continue
-        seen_trials[key] = o
         o["contacts"] = []
         opps.append(o)
 
@@ -295,7 +292,13 @@ def build_category_view(clin_rows: list[dict], lead_rows: list[dict], category: 
     # 5. Dedupe + sort contacts within each opportunity
     for o in opps:
         o["contacts"] = _dedupe_contacts(o["contacts"])
+        # Hide leads that have already been emailed (Last Sent timestamp set)
+        o["contacts"] = [c for c in o["contacts"] if not (c.get("last_sent") or "").strip()]
         o["contacts"].sort(key=lambda c: (c.get("contact_score") is None, -(c.get("contact_score") or 0)))
+    # NOTE: trials without contacts are kept in the list so the full pipeline is
+    # visible. They just sort to the bottom (no contact score). Maryam can still
+    # see the trial exists and add a contact email via the "Save typed email"
+    # flow if she wants to reach out manually.
 
     # 6. Sort opportunities: best available contact score first, then contact count
     def opp_rank(o):

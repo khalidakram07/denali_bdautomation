@@ -6,6 +6,19 @@
   <title>Denali Health — BD Automation</title>
   <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Mono:wght@400;500&family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/style.css">
+<style>
+.combo { position: relative; display: inline-block; min-width: 220px; }
+.combo-input { width: 100%; padding: 6px 28px 6px 10px; border: 1px solid var(--rule, #d0d5dd); border-radius: 6px; font-size: 13px; font-family: inherit; outline: none; background: #fff; box-sizing: border-box; cursor: text; }
+.combo-input:focus { border-color: #2563eb; }
+.combo-arrow { position: absolute; top: 50%; right: 8px; transform: translateY(-50%); width: 16px; height: 16px; display: flex; align-items: center; justify-content: center; color: #6b7280; cursor: pointer; user-select: none; pointer-events: auto; font-size: 10px; transition: transform 0.15s ease; }
+.combo.open .combo-arrow { transform: translateY(-50%) rotate(180deg); }
+.combo-panel { position: absolute; top: 100%; left: 0; right: 0; margin-top: 2px; background: #fff; border: 1px solid var(--rule, #d0d5dd); border-radius: 6px; max-height: 280px; overflow-y: auto; z-index: 100; box-shadow: 0 6px 14px rgba(0,0,0,0.10); }
+.combo-panel.hidden { display: none; }
+.combo-option { padding: 7px 10px; cursor: pointer; font-size: 13px; }
+.combo-option:hover, .combo-option.active { background: #eef4ff; }
+.combo-empty { padding: 7px 10px; font-size: 12px; color: #9ca3af; font-style: italic; }
+#oppCombo { min-width: 360px; }
+</style>
 </head>
 <body>
 
@@ -24,22 +37,22 @@
 <!-- ── CONTROLS BAR ────────────────────────────── -->
 <div class="controls">
   <div class="control-group">
-    <label for="categorySelect">Category</label>
-    <select id="categorySelect"><option value="">— loading… —</option></select>
+    <label>Category</label>
+    <div id="categoryCombo"></div>
   </div>
   <div class="control-group">
-    <label for="subcategorySelect">Subcategory</label>
-    <select id="subcategorySelect"><option value="">— all conditions —</option></select>
+    <label>Subcategory</label>
+    <div id="subcategoryCombo"></div>
   </div>
   <div class="control-group">
-    <label for="oppSelect">Opportunity</label>
-    <select id="oppSelect"><option value="">— select a category —</option></select>
+    <label>Opportunity</label>
+    <div id="oppCombo"></div>
   </div>
   <button id="syncBtn" class="btn btn-secondary">↻ Refresh from Sheet</button>
   <!-- Obsolete in the live-Sheets model (kept hidden so legacy handlers don't error) -->
   <input type="file" id="csvFile" accept=".csv" class="hidden">
   <button id="seedBtn" class="btn btn-secondary hidden">Seed demo contacts</button>
-  <button id="addContactBtn" class="btn btn-secondary hidden">+ Add real contact</button>
+  <button id="addContactBtn" class="btn btn-secondary">+ Add contact</button>
 </div>
 
 <!-- Manual contact entry form (hidden until + Add real contact clicked) -->
@@ -49,7 +62,7 @@
     <div style="display:grid;grid-template-columns:1fr 1fr 2fr 2fr;gap:10px;margin-bottom:12px;">
       <input id="acFirst" type="text" placeholder="First name *" style="padding:8px 10px;border:1px solid var(--rule);border-radius:6px;font-size:13px;">
       <input id="acLast"  type="text" placeholder="Last name"  style="padding:8px 10px;border:1px solid var(--rule);border-radius:6px;font-size:13px;">
-      <input id="acEmail" type="email" placeholder="Email * (e.g. d.collins@precisionformedicine.com)" style="padding:8px 10px;border:1px solid var(--rule);border-radius:6px;font-size:13px;">
+      <input id="acEmail" type="email" placeholder="Email (optional — can add later when sending)" style="padding:8px 10px;border:1px solid var(--rule);border-radius:6px;font-size:13px;">
       <input id="acTitle" type="text" placeholder="Title (e.g. VP, Site Identification)" style="padding:8px 10px;border:1px solid var(--rule);border-radius:6px;font-size:13px;">
     </div>
     <div style="display:flex;gap:10px;">
@@ -204,6 +217,11 @@
             <input id="attachmentInput" type="file" multiple style="font-size:12px;font-family:inherit;flex:1;min-width:0;" />
             <button id="attachClearBtn" type="button" title="Remove attachment" class="hidden" style="font-size:11px;padding:4px 8px;border:1px solid var(--rule);border-radius:6px;background:var(--white);cursor:pointer;">✕ clear</button>
           </div>
+
+          <span style="font-size:10px;font-family:'DM Mono',monospace;color:var(--ink-soft);text-transform:uppercase;letter-spacing:0.8px;">Save:</span>
+          <label id="saveEmailWrap" style="font-size:12px;color:var(--ink-mid);display:flex;align-items:center;gap:6px;cursor:pointer;">
+            <input type="checkbox" id="saveEmailToSheet" /> Save typed email back to the Sheet
+          </label>
         </div>
       </div>
       <div class="approval-actions">

@@ -106,3 +106,163 @@ def append_to_sent_log(sheet_id: str, row: dict) -> None:
         headers = list(row.keys())
         ws.append_row(headers)
     ws.append_row([str(row.get(h, "")) for h in headers])
+
+# Column name written to the Leads tab when a send succeeds. If the column
+# doesn't exist yet, it's added on the first call. A non-empty value means
+# "this lead has been emailed" and the app filters them out of the dropdowns.
+SENT_COLUMN = "Last Sent"
+
+
+def mark_lead_sent(sheet_id: str, trial_id: str, email: str, when_iso: str,
+                   leads_tab: str = None) -> bool:
+    """
+    Mark a Leads row as emailed by writing `when_iso` into the "Last Sent" column.
+    Matches by Trial ID + Business Email or Personal Email (case-insensitive).
+    Creates the "Last Sent" column on the fly if it's missing.
+    Returns True if a row was updated, False otherwise (silently — never raises).
+    """
+    if not (sheet_id and trial_id and email):
+        return False
+    leads_tab = leads_tab or os.getenv("SHEETS_TAB_LEADS", "Leads")
+    try:
+        sh = open_sheet(sheet_id)
+        ws = sh.worksheet(leads_tab)
+    except Exception as e:
+        log.warning("mark_lead_sent: cannot open %s/%s (%s)", sheet_id, leads_tab, e)
+        return False
+
+    try:
+        rows = ws.get_all_values()
+    except Exception as e:
+        log.warning("mark_lead_sent: cannot read %s/%s (%s)", sheet_id, leads_tab, e)
+        return False
+    if not rows:
+        return False
+
+    headers = [h.strip() for h in rows[0]]
+    def col(name):
+        return headers.index(name) if name in headers else None
+
+    tid_col  = col("Trial ID") or col("Trial IDs")
+    biz_col  = col("Business Email")
+    pers_col = col("Personal Email")
+    if tid_col is None or (biz_col is None and pers_col is None):
+        log.warning("mark_lead_sent: missing key columns in Leads tab")
+        return False
+
+    # Ensure SENT_COLUMN exists (append as last column if not)
+    if SENT_COLUMN in headers:
+        sent_col = headers.index(SENT_COLUMN)
+    else:
+        sent_col = len(headers)
+        try:
+            ws.update_cell(1, sent_col + 1, SENT_COLUMN)
+        except Exception as e:
+            log.warning("mark_lead_sent: cannot add header column: %s", e)
+            return False
+
+    target_email = email.strip().lower()
+    target_tid   = trial_id.strip()
+
+    for i, row in enumerate(rows[1:], start=2):  # gspread is 1-indexed; +1 for header
+        row_tid = (row[tid_col] if tid_col < len(row) else "").strip()
+        if row_tid != target_tid:
+            continue
+        row_biz  = (row[biz_col]  if biz_col  is not None and biz_col  < len(row) else "").strip().lower()
+        row_pers = (row[pers_col] if pers_col is not None and pers_col < len(row) else "").strip().lower()
+        if row_biz == target_email or row_pers == target_email:
+            try:
+                ws.update_cell(i, sent_col + 1, when_iso)
+                return True
+            except Exception as e:
+                log.warning("mark_lead_sent: write failed for row %d: %s", i, e)
+                return False
+    log.info("mark_lead_sent: no Leads row matched trial=%s email=%s", target_tid, target_email)
+    return False
+
+def update_lead_field(sheet_id: str, trial_id: str, contact_name: str,
+                      field: str, value: str, leads_tab: str = None) -> bool:
+    """
+    Set one field on a lead row in the Leads tab. Matches by Trial ID + Name
+    (case-insensitive). Adds the column to the header row if it doesn't exist.
+    Returns True if updated, False otherwise (silently — never raises).
+    """
+    if not (sheet_id and trial_id and contact_name and field):
+        return False
+    leads_tab = leads_tab or os.getenv("SHEETS_TAB_LEADS", "Leads")
+    try:
+        sh = open_sheet(sheet_id)
+        ws = sh.worksheet(leads_tab)
+        rows = ws.get_all_values()
+    except Exception as e:
+        log.warning("update_lead_field: cannot open %s/%s (%s)", sheet_id, leads_tab, e)
+        return False
+    if not rows:
+        return False
+
+    headers = [h.strip() for h in rows[0]]
+    def col(name):
+        return headers.index(name) if name in headers else None
+
+    tid_col  = col("Trial ID")
+    if tid_col is None:
+        tid_col = col("Trial IDs")
+    name_col = col("Name")
+    if tid_col is None or name_col is None:
+        log.warning("update_lead_field: missing Trial ID or Name column")
+        return False
+
+    if field in headers:
+        target_col = headers.index(field)
+    else:
+        target_col = len(headers)
+        try:
+            ws.update_cell(1, target_col + 1, field)
+        except Exception as e:
+            log.warning("update_lead_field: cannot add header %s: %s", field, e)
+            return False
+
+    target_tid  = trial_id.strip()
+    target_name = contact_name.strip().lower()
+    for i, row in enumerate(rows[1:], start=2):
+        row_tid = (row[tid_col] if tid_col < len(row) else "").strip()
+        if row_tid != target_tid:
+            continue
+        row_name = (row[name_col] if name_col < len(row) else "").strip().lower()
+        if row_name == target_name:
+            try:
+                ws.update_cell(i, target_col + 1, value)
+                return True
+            except Exception as e:
+                log.warning("update_lead_field: write failed: %s", e)
+                return False
+    log.info("update_lead_field: no row matched trial=%s name=%s", target_tid, target_name)
+    return False
+
+def append_lead_row(sheet_id: str, row: dict, leads_tab: str = None) -> bool:
+    """
+    Append a new contact row to the Leads tab. `row` is keyed by column header
+    (e.g. {"Name": "Jane Doe", "Trial ID": "NCT123", "Business Email": "x@y.com"}).
+    Any header not present in `row` gets a blank cell. Returns True if appended.
+    """
+    if not (sheet_id and row):
+        return False
+    leads_tab = leads_tab or os.getenv("SHEETS_TAB_LEADS", "Leads")
+    try:
+        sh = open_sheet(sheet_id)
+        ws = sh.worksheet(leads_tab)
+        headers = ws.row_values(1)
+    except Exception as e:
+        log.warning("append_lead_row: cannot open %s/%s (%s)", sheet_id, leads_tab, e)
+        return False
+    if not headers:
+        log.warning("append_lead_row: Leads tab has no headers")
+        return False
+    row_values = [str(row.get(h, "")) for h in headers]
+    try:
+        ws.append_row(row_values, value_input_option="USER_ENTERED")
+        return True
+    except Exception as e:
+        log.warning("append_lead_row: append failed: %s", e)
+        return False
+

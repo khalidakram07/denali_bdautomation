@@ -62,6 +62,95 @@ function fmtDate(s) {
   return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
+
+// ── Searchable combobox (replaces the old <select> dropdowns) ──
+function makeCombo(containerId, placeholder, onPick) {
+  const root = document.getElementById(containerId);
+  if (!root) return null;
+  root.innerHTML = '';
+  root.classList.add('combo');
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.placeholder = placeholder;
+  input.autocomplete = 'off';
+  input.className = 'combo-input';
+  const panel = document.createElement('div');
+  panel.className = 'combo-panel hidden';
+  const arrow = document.createElement('span');
+  arrow.className = 'combo-arrow';
+  arrow.innerHTML = '▼';
+  arrow.title = 'Show all';
+  arrow.addEventListener('mousedown', (e) => {
+    e.preventDefault();
+    if (panel.classList.contains('hidden')) {
+      input.focus();
+      input.select();
+      // render() will run via the focus handler
+    } else {
+      panel.classList.add('hidden');
+      root.classList.remove('open');
+      input.blur();
+    }
+  });
+  root.appendChild(input); root.appendChild(arrow); root.appendChild(panel);
+  let all = [];
+  let currentValue = '';
+  let highlighted = -1;
+  function render(filter) {
+    const f = (filter || '').toLowerCase();
+    panel.innerHTML = '';
+    const matches = all.filter(o => o.label.toLowerCase().includes(f));
+    matches.slice(0, 300).forEach((o, idx) => {
+      const div = document.createElement('div');
+      div.className = 'combo-option' + (idx === highlighted ? ' active' : '');
+      div.textContent = o.label;
+      div.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        input.value = o.label;
+        currentValue = o.value;
+        panel.classList.add('hidden');
+        onPick(o.value, o);
+      });
+      panel.appendChild(div);
+    });
+    if (matches.length === 0) {
+      const div = document.createElement('div');
+      div.className = 'combo-empty';
+      div.textContent = all.length === 0 ? 'No items' : 'No matches';
+      panel.appendChild(div);
+    }
+  }
+  input.addEventListener('focus', () => { highlighted = -1; render(input.value); panel.classList.remove('hidden'); root.classList.add('open'); });
+  input.addEventListener('input', () => { highlighted = -1; render(input.value); panel.classList.remove('hidden'); });
+  input.addEventListener('blur',  () => { setTimeout(() => { panel.classList.add('hidden'); root.classList.remove('open'); }, 180); });
+  input.addEventListener('keydown', (e) => {
+    const opts = panel.querySelectorAll('.combo-option');
+    if (e.key === 'Escape') { panel.classList.add('hidden'); return; }
+    if (e.key === 'ArrowDown') { e.preventDefault(); highlighted = Math.min(opts.length - 1, highlighted + 1); render(input.value); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); highlighted = Math.max(0, highlighted - 1); render(input.value); }
+    else if (e.key === 'Enter' && highlighted >= 0 && opts[highlighted]) {
+      opts[highlighted].dispatchEvent(new MouseEvent('mousedown'));
+    }
+  });
+  return {
+    setOptions(list) {
+      all = list || [];
+      if (currentValue) {
+        const m = all.find(o => o.value === currentValue);
+        input.value = m ? m.label : '';
+        if (!m) currentValue = '';
+      }
+    },
+    setValue(value) {
+      const m = all.find(o => o.value === value);
+      currentValue = m ? value : '';
+      input.value = m ? m.label : '';
+    },
+    getValue() { return currentValue; },
+  };
+}
+let categoryCombo = null, subcategoryCombo = null, oppCombo = null;
+
 // ── Activity log ─────────────────────────────────
 function logEntry(text, type) {
   const body = $('logBody');
@@ -106,27 +195,24 @@ async function loadCategories() {
     return;
   }
   const cats = data.categories || [];
-  const sel = $('categorySelect');
-  clear(sel);
   if (cats.length === 0) {
-    sel.appendChild(new Option('— no categories found —', ''));
+    categoryCombo.setOptions([]);
     show('emptyState'); hide('mainShell');
     logEntry('No categories found in the LeadsCategory Drive folder', 'sys');
     return;
   }
-  cats.forEach(c => sel.appendChild(new Option(c.name, c.name)));
+  categoryCombo.setOptions(cats.map(c => ({ value: c.name, label: c.name })));
   const saved = localStorage.getItem('denali.category');
-  sel.value = (saved && cats.some(c => c.name === saved)) ? saved : cats[0].name;
-  state.category = sel.value;
+  const chosen = (saved && cats.some(c => c.name === saved)) ? saved : cats[0].name;
+  categoryCombo.setValue(chosen);
+  state.category = chosen;
   await loadCategoryData();
 }
 
 async function loadCategoryData(forceRefresh = false) {
   if (!state.category) return;
   localStorage.setItem('denali.category', state.category);
-  const sel = $('oppSelect');
-  clear(sel);
-  sel.appendChild(new Option('— loading… —', ''));
+  oppCombo.setOptions([{ value: '', label: '— loading… —' }]);
   let payload;
   try {
     const path = `/api/leads/category/${encodeURIComponent(state.category)}${forceRefresh ? '?refresh=true' : ''}`;
@@ -149,19 +235,15 @@ function splitConditions(s) {
 }
 
 function populateSubcategories() {
-  const sel = $('subcategorySelect');
-  clear(sel);
-  sel.appendChild(new Option('— all conditions —', ''));
+  const opts = [{ value: '', label: '— all conditions —' }];
   const set = new Set();
   state.opps.forEach(o => splitConditions(o.indication).forEach(c => set.add(c)));
-  [...set].sort((a, b) => a.localeCompare(b)).forEach(c => sel.appendChild(new Option(c, c)));
+  [...set].sort((a, b) => a.localeCompare(b)).forEach(c => opts.push({ value: c, label: c }));
+  subcategoryCombo.setOptions(opts);
   const saved = localStorage.getItem(`denali.subcategory.${state.category}`);
-  if (saved && [...sel.options].some(o => o.value === saved)) {
-    sel.value = saved;
-  } else {
-    sel.value = '';
-  }
-  state.subcategory = sel.value;
+  const valid = saved && opts.some(o => o.value === saved);
+  subcategoryCombo.setValue(valid ? saved : '');
+  state.subcategory = valid ? saved : '';
 }
 
 function filteredOpps() {
@@ -171,24 +253,53 @@ function filteredOpps() {
 }
 
 function renderOpportunityDropdown() {
-  const sel = $('oppSelect');
-  clear(sel);
   const opps = filteredOpps();
   if (opps.length === 0) {
-    sel.appendChild(new Option('— no trials for this filter —', ''));
+    oppCombo.setOptions([]);
     show('emptyState'); hide('mainShell');
     return;
   }
   hide('emptyState'); show('mainShell');
-  opps.forEach(o => {
+  const opts = opps.map(o => {
     const n = o.contacts ? o.contacts.length : 0;
     const who = o.sponsor_name || '(unknown sponsor)';
     const title = (o.trial_title && o.trial_title !== who) ? ` — ${o.trial_title}` : '';
     const label = `${who}${title} · ${n} contact${n === 1 ? '' : 's'}`;
-    sel.appendChild(new Option(label.length > 95 ? label.slice(0, 95) + '…' : label, o.id));
+    return { value: String(o.id), label: label.length > 95 ? label.slice(0, 95) + '…' : label };
   });
-  sel.value = opps[0].id;
+  oppCombo.setOptions(opts);
+  oppCombo.setValue(String(opps[0].id));
   loadOpportunity(opps[0].id);
+}
+
+async function softRefreshCategory() {
+  // Re-pull the current category so a just-sent lead disappears from the
+  // dropdown, but DON'T replace the visible "Approved" draft view.
+  if (!state.category) return;
+  try {
+    const path = `/api/leads/category/${encodeURIComponent(state.category)}?refresh=true`;
+    const payload = await API.get(path);
+    state.opps = payload.opportunities || [];
+    populateSubcategories();
+    const prev = oppCombo.getValue();
+    const opps = filteredOpps();
+    if (opps.length === 0) {
+      oppCombo.setOptions([]);
+      return;
+    }
+    const optsNew = opps.map(o => {
+      const n = o.contacts ? o.contacts.length : 0;
+      const who = o.sponsor_name || '(unknown sponsor)';
+      const title = (o.trial_title && o.trial_title !== who) ? ` — ${o.trial_title}` : '';
+      const label = `${who}${title} · ${n} contact${n === 1 ? '' : 's'}`;
+      return { value: String(o.id), label: label.length > 95 ? label.slice(0, 95) + '…' : label };
+    });
+    oppCombo.setOptions(optsNew);
+    if (optsNew.some(o => o.value === String(prev))) oppCombo.setValue(String(prev));
+  } catch (err) {
+    // silent — the email already went out; this is just a UX refresh
+    console.warn('soft refresh failed:', err);
+  }
 }
 
 function loadOpportunity(oppId) {
@@ -315,8 +426,22 @@ function renderContact(c) {
     return;
   }
   $('contactConfidence').style.display = '';
-  // Pre-fill the "To:" override field with the contact's email
-  $('toEmailInput').value = c.email || '';
+  // Pre-fill the "To:" override field; highlight + nudge when the lead has none.
+  const inp = $('toEmailInput');
+  inp.value = c.email || '';
+  if (!c.email) {
+    inp.style.borderColor = '#f59e0b';
+    inp.style.background  = '#fffbeb';
+    inp.placeholder       = 'No email on file — type one to send';
+  } else {
+    inp.style.borderColor = '';
+    inp.style.background  = '';
+    inp.placeholder       = 'recipient@example.com';
+  }
+  // "Save typed email back to the Sheet" default: ON when the lead has no email
+  // (you're adding a missing one), OFF when overriding an existing one.
+  const saveCb = $('saveEmailToSheet');
+  if (saveCb) saveCb.checked = !c.email;
   const fullName = c.full_name || ((c.first_name || '') + ' ' + (c.last_name || '')).trim();
   const initials = ((c.first_name || c.full_name || '?')[0] + ((c.last_name || ' ')[0] || ' ')).toUpperCase();
   const score = c.contact_score ?? 0;
@@ -535,34 +660,37 @@ function onToggleAddContact() {
 }
 
 async function onSubmitContact() {
-  if (!state.oppId) {
+  if (!state.opp) {
     $('acError').textContent = 'Pick an opportunity first';
     return;
   }
   const first = $('acFirst').value.trim();
+  const last  = $('acLast').value.trim();
   const email = $('acEmail').value.trim();
-  if (!first || !email) {
-    $('acError').textContent = 'First name and email are required';
+  const title = $('acTitle').value.trim();
+  if (!first) {
+    $('acError').textContent = 'First name is required';
     return;
   }
-  $('acError').textContent = '';
+  const name = (first + ' ' + last).trim();
   $('acSubmit').disabled = true;
+  $('acError').textContent = '';
   try {
-    await API.post('/api/contacts/', {
-      opportunity_id: state.oppId,
-      first_name: first,
-      last_name:  $('acLast').value.trim() || null,
-      email:      email,
-      title:      $('acTitle').value.trim() || null,
+    await API.post(`/api/leads/category/${encodeURIComponent(state.category)}/contact`, {
+      trial_id:       state.opp.trial_id || '',
+      company:        state.opp.sponsor_name || '',
+      phase:          state.opp.phase || '',
+      condition:      state.opp.indication || '',
+      name:           name,
+      title:          title || null,
+      business_email: email || null,
     });
-    logEntry(`Manually added contact: ${first} ${$('acLast').value.trim()} <${email}>`, 'ok');
-    // Clear and hide
-    ['acFirst','acLast','acEmail','acTitle'].forEach(id => $(id).value = '');
+    logEntry(`Added contact ${name} to ${state.opp.sponsor_name || 'this trial'}`, 'ok');
     $('addContactForm').classList.add('hidden');
-    await loadOpportunity(state.oppId);
+    ['acFirst','acLast','acEmail','acTitle'].forEach(id => { $(id).value = ''; });
+    await loadCategoryData(true);   // refresh so the new contact shows up
   } catch (err) {
-    $('acError').textContent = err.message;
-    logEntry(`Add contact failed: ${err.message}`, 'err');
+    $('acError').textContent = `Failed: ${err.message}`;
   } finally {
     $('acSubmit').disabled = false;
   }
@@ -753,6 +881,7 @@ async function onApprove() {
   if (editedSubject) fd.append('edited_subject', editedSubject);
   if (editedBody)    fd.append('edited_body', editedBody);
   attachFiles.forEach(f => fd.append('attachments', f, f.name));
+  if ($('saveEmailToSheet') && $('saveEmailToSheet').checked && toOverride) fd.append('save_recipient_email', '1');
 
   try {
     const res = await API.post(`/api/drafts/${state.draft.id}/approve`, fd, true);
@@ -770,6 +899,7 @@ async function onApprove() {
       const attachTag = send.attachment_count ? `  📎 ${send.attachment_count} file(s): ${send.attachment}` : '';
       logEntry(`${mode}: ${send.sent_via} → ${send.to}${overrideTag}${attachTag}  msg-id=${send.message_id}`, 'ok');
       loadSendHistory();   // refresh the history panel so the new row shows up
+      softRefreshCategory();   // sent contact disappears from the dropdown
     } else {
       logEntry('Draft approved (no mailbox selected — not sent)', 'sys');
     }
@@ -809,9 +939,15 @@ async function onReject() {
 // ── Init ─────────────────────────────────────────
 window.addEventListener('DOMContentLoaded', async () => {
   $('csvFile').addEventListener('change', onUpload);
-  $('categorySelect').addEventListener('change', e => { state.category = e.target.value; loadCategoryData(); });
-  $('subcategorySelect').addEventListener('change', e => { state.subcategory = e.target.value; localStorage.setItem(`denali.subcategory.${state.category}`, state.subcategory); renderOpportunityDropdown(); });
-  $('oppSelect').addEventListener('change', e => loadOpportunity(e.target.value));
+  categoryCombo = makeCombo('categoryCombo', 'Type to search categories…', (val) => {
+    state.category = val; loadCategoryData();
+  });
+  subcategoryCombo = makeCombo('subcategoryCombo', 'All conditions (type to filter)', (val) => {
+    state.subcategory = val;
+    if (state.category) localStorage.setItem(`denali.subcategory.${state.category}`, val);
+    renderOpportunityDropdown();
+  });
+  oppCombo = makeCombo('oppCombo', 'Type to search trials…', (val) => loadOpportunity(val));
   $('syncBtn').addEventListener('click', onSyncSheets);
   $('refreshTemplatesBtn').addEventListener('click', async () => {
     const btn = $('refreshTemplatesBtn');
