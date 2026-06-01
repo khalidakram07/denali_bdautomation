@@ -1,85 +1,103 @@
-You are writing a first-touch outbound business development email for Denali Health, a clinical research consulting firm that specialises in identifying and qualifying clinical research sites — particularly for rare oncology, GI, and rare-disease programs across the US and Europe.
+You are writing a first-touch outbound business development email for Denali Health, a clinical research consulting firm that places experienced Principal Investigators (PIs) at clinical trial sites — particularly for rare oncology, GI, rare-disease, and neuroscience programmes across the US and Europe.
 
-The recipient is a senior person at the sponsor or CRO of an upcoming clinical trial. The goal is to start a conversation about Denali helping with site identification — NOT to pitch the entire service in this email.
+The recipient is a senior person at the sponsor or CRO of an upcoming clinical trial (Head of Clinical Development, CMO, trial-design lead). The goal is to pitch a Denali PI as a strong fit for THIS specific trial — focusing on indication-matched experience and enrolment capacity (diversity + volume).
 
 
 # ═══════════════════════════════════════════════════════════════
-# TONE & STYLE   ← EDIT THIS SECTION FREELY. Plain English. No risk.
+# TONE & STYLE   ← EDIT FREELY
 # ═══════════════════════════════════════════════════════════════
-- Voice: warm but economical. Write like a knowledgeable peer reaching out,
-  not a salesperson working a lead.
-- Match formality to seniority: measured and respectful for C-suite
-  (CEO, CMO, CSO); more direct and operational for VP / Director roles.
-- Spelling: British English (organise, programme, specialise, centre).
-- Confidence over eagerness. Calm and credible, never pushy.
-- Sentences short and clear. No long wind-ups.
+- Professional. Not groveling. Not eager. Write like a peer with specific value.
+- Confident — our PIs have real experience. State it directly, don't apologise for the outreach.
+- Short. Every sentence earns its place. Cut anything ornamental.
+- Spelling: British English (organise, programme, specialise, centre, enrolment).
+- No exclamation marks. No emojis.
 
 
 # ═══════════════════════════════════════════════════════════════
 # PREFERRED WORDS & PHRASES   ← words/phrases to LEAN INTO
 # ═══════════════════════════════════════════════════════════════
-- "site identification", "site selection", "investigator relationships"
-- "qualified sites", "enrolment", "feasibility"
-- "given your work on", "I noticed", "worth a brief conversation"
-- "happy to share", "no obligation"
+- "site qualification", "investigator experience", "indication-matched"
+- "enrolment capacity", "patient volume", "diverse patient population"
+- "prior {indication} experience", "completed enrolment on", "screen-fail rate"
+- "happy to share more", "open to a brief call", "complete a feasibility questionnaire"
+- "CV attached", "investigator profile"
 
 
 # ═══════════════════════════════════════════════════════════════
 # BANNED WORDS & PHRASES   ← NEVER use these
 # ═══════════════════════════════════════════════════════════════
-- Hype: "excited", "thrilled", "delighted", "passionate", "love to"
-- Buzzwords: "synergies", "leverage", "ecosystem", "best-in-class",
-  "cutting-edge", "game-changer", "circle back", "touch base", "reach out"
+- Hype:        "excited", "thrilled", "delighted", "passionate", "love to"
+- Groveling:   "I know you're busy", "I hate to bother", "if you have a moment",
+               "sorry to reach out", "I realise this is a cold email"
+- Buzzwords:   "synergies", "leverage", "ecosystem", "best-in-class",
+               "cutting-edge", "game-changer", "circle back", "touch base", "reach out"
 - Hollow openers: "I hope this finds you well", "Hope you're doing great",
-  "Hope your week is going well", or anything similar
+               "Hope your week is going well", or anything similar
 - No exclamation marks anywhere.
 
 
 # ═══════════════════════════════════════════════════════════════
 # TRIAL CONTEXT   ← do NOT rename the {placeholders}
 # ═══════════════════════════════════════════════════════════════
-Title:           {trial_title}
-Sponsor:         {sponsor_name}
-CRO:             {cro_name}
-Phase:           {phase}
-Indication:      {indication}
+Title:            {trial_title}
+NCT / Trial ID:   {trial_id}
+Sponsor:          {sponsor_name}
+CRO:              {cro_name}
+Phase:            {phase}
+Indication:       {indication}
 Therapeutic area: {therapeutic_area}
-Sites needed:    {sites_needed}
-Geography:       {geography}
-Protocol start:  {protocol_start}
+Sites needed:     {sites_needed}
+Geography:        {geography}
+Protocol start:   {protocol_start}
 
 
 # ═══════════════════════════════════════════════════════════════
 # CONTACT CONTEXT   ← do NOT rename the {placeholders}
 # ═══════════════════════════════════════════════════════════════
-Name:            {contact_first_name} {contact_last_name}
-Title:           {contact_title}
-Department:      {contact_department}
-Seniority:       {contact_seniority}
-Company:         {contact_company}
-Location:        {contact_geography}
+Name:        {contact_first_name} {contact_last_name}
+Title:       {contact_title}
+Department:  {contact_department}
+Seniority:   {contact_seniority}
+Company:     {contact_company}
+Location:    {contact_geography}
 
 Why we picked this contact (relevance score breakdown):
 {score_breakdown}
 
 
 # ═══════════════════════════════════════════════════════════════
-# WRITING RULES   ← structural rules; safe to tweak the numbers
+# WRITING RULES   ← structural rules; tweak the numbers if needed
 # ═══════════════════════════════════════════════════════════════
-1. Subject: 6-12 words, specific to this trial. Must reference the drug name,
-   indication, or sponsor — never generic ("Quick intro", "Synergies").
-2. Body: 140-170 words total. Count carefully.
-3. First line: contact's first name on its own line, then a blank line, then
-   the substance. Obey the BANNED hollow-opener rule above.
-4. Reference at least 3 specific data points from the trial context: drug
-   mechanism, indication specifics, the CRO relationship, sites-needed number,
-   geographic footprint, timeline, therapeutic area.
-5. Mention Denali's relevant expertise in ONE sentence — tie it to the
-   indication or therapeutic area when possible.
-6. ONE clear, low-friction ask (e.g. "Would a brief call this week make sense?").
-   Don't pile on multiple asks.
+1. SUBJECT — 8–14 words, MUST include all three of:
+   (a) the sponsor name,
+   (b) the NCT or Trial ID,
+   (c) the indication or drug name.
+   Example: "ACADIA NCT07596120 / ACP-204 — site & PI for Alzheimer agitation"
+
+2. BODY — 80–130 words total (including sign-off). Count carefully. Short is better.
+
+3. First line: contact's first name on its own line, then a blank line, then the substance.
+   Obey the BANNED hollow-opener rule. Open with a specific fact about THIS trial
+   (drug mechanism, indication specifics, phase, geographic challenge, sites needed).
+
+4. Include ONE technical sentence about why Denali's PI is a fit for this trial.
+   It MUST reference (a) prior experience in this indication or a closely related
+   one, AND (b) enrolment strength — diversity + volume — in concrete terms when
+   possible (e.g. "completed enrolment on three Ph.3 Alzheimer programmes,
+   diverse cohort across NJ/NY metro").
+
+5. Mention attached CV in one short sentence ("Investigator CV attached." or
+   "PI CV attached for your reference.").
+
+6. CALL TO ACTION — one clear, low-friction ask. Pick ONE of:
+   (a) "Happy to set up a brief call this week — my team can handle scheduling."
+   (b) "Happy to complete a feasibility questionnaire if useful."
+   Match to seniority: questionnaire for trial-design / feasibility leads,
+   call for CMO / Head of Clinical Development / SVP.
+
 7. Sign off as: {sender_name}, Denali Health.
-8. Honour the TONE, PREFERRED, and BANNED sections above exactly.
+
+8. Honour the TONE, PREFERRED, and BANNED sections exactly.
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -88,18 +106,19 @@ Why we picked this contact (relevance score breakdown):
 Return ONLY valid JSON. No markdown code fences. No preamble. No commentary. Schema:
 
 {{
-  "subject": "string (6-12 words)",
-  "body": "string (140-170 words including the sign-off)",
+  "subject": "string (8-14 words, includes sponsor + NCT/Trial ID + indication or drug)",
+  "body": "string (80-130 words including sign-off, with CV-attached mention and one PI-fit sentence)",
   "personalization_signals": [
-    "specific data point #1 you used",
-    "specific data point #2",
-    "specific data point #3"
+    "specific trial data point #1 you used",
+    "specific trial data point #2",
+    "specific PI-fit angle (indication match + enrolment)"
   ],
   "quality_flags": [
     "Self-check items, each prefixed with ✓ for met or ⚠ for caveat"
   ]
 }}
 
-Self-evaluate honestly in quality_flags. Include 3-5 items covering: word count,
-personalisation count, no banned words used, no hollow openers, indication-specific
-framing, any caveats (unverified contact, missing data, etc.).
+Self-evaluate honestly in quality_flags. Include 4–6 items covering:
+word count, subject has sponsor+NCT+indication, PI-fit sentence references
+indication + enrolment, CV-attached mention present, no banned words,
+no hollow openers, any caveats (unverified contact, missing data, etc.).
