@@ -252,12 +252,21 @@ RULES:
 5. No hollow openers ("Hope this finds you well") - the brackets specifically demand specificity.
 6. If the source article does not give you enough to fill a [BRACKET], improvise tastefully using {{indication}}, {{phase}}, and {{company}} context - do NOT leave brackets in the output.
 
-Return ONLY JSON in this exact shape (no markdown fences, no preamble):
+Return ONLY valid JSON. No markdown fences. No preamble. Schema:
+
+- subject (STRING) — the email subject line, as a real subject (not a placeholder).
+  • If the template has a 'SUBJECT:' line, copy that line's text verbatim (without the 'SUBJECT:' prefix).
+  • If the template has NO 'SUBJECT:' line, generate one yourself: 8–14 words, MUST include the sponsor name, the NCT/Trial ID, and the indication or drug name. Example: "ACADIA NCT07596120 / ACP-204 — site & PI for Alzheimer agitation"
+- body (STRING) — the full filled-in email body, excluding the SUBJECT line. Every [BRACKETED INSTRUCTION] must be replaced with prose; no brackets remain.
+- personalization_signals (ARRAY of strings) — 3 specific facts from the source article you actually used.
+- quality_flags (ARRAY of strings) — self-evaluation items, each prefixed with ✓ (met) or ⚠ (caveat). Cover: subject contains sponsor+NCT+indication, no [BRACKETS] remain, no banned words, body word count.
+
+Output structure (fill with real values):
 {{
-  "subject": "extracted from the SUBJECT: line",
-  "body": "full filled-in body without the SUBJECT line",
-  "personalization_signals": ["specific fact #1 used", "specific fact #2", "..."],
-  "quality_flags": ["self-evaluation, prefix with ✓ or ⚠"]
+  "subject": "...",
+  "body": "...",
+  "personalization_signals": ["...", "...", "..."],
+  "quality_flags": ["...", "..."]
 }}
 """
 

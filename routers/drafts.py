@@ -288,7 +288,8 @@ async def approve_draft(
 
         final_subject = edited_subject or draft_data["subject_line"]
         final_body    = edited_body    or draft_data["body_text"]
-        sender_display = os.getenv("DEFAULT_SENDER_NAME", "Maryam") + " (Denali Health)"
+        sender_display = (chosen_mb.get("display_name") or "").strip() \
+            or f"{os.getenv('DEFAULT_SENDER_NAME', 'Maryam')} (Denali Health)"
 
         try:
             result = send_email(
