@@ -30,7 +30,7 @@ const API = {
 // ── App state ────────────────────────────────────
 const state = {
   category: null,
-  subcategory: '',
+  subcategory: [],
   opps: [],
   oppId: null,
   opp: null,
@@ -151,6 +151,86 @@ function makeCombo(containerId, placeholder, onPick) {
 }
 let categoryCombo = null, subcategoryCombo = null, oppCombo = null;
 
+// ── Multi-select combo (checkboxes; for Subcategory) ──
+function makeMultiCombo(containerId, placeholder, onChange) {
+  const root = document.getElementById(containerId);
+  if (!root) return null;
+  root.innerHTML = '';
+  root.classList.add('combo');
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.placeholder = placeholder;
+  input.autocomplete = 'off';
+  input.className = 'combo-input';
+  input.readOnly = false;
+  const panel = document.createElement('div');
+  panel.className = 'combo-panel hidden';
+  const arrow = document.createElement('span');
+  arrow.className = 'combo-arrow';
+  arrow.innerHTML = '▼';
+  arrow.addEventListener('mousedown', (e) => {
+    e.preventDefault();
+    if (panel.classList.contains('hidden')) { input.focus(); }
+    else { panel.classList.add('hidden'); root.classList.remove('open'); input.blur(); }
+  });
+  root.appendChild(input); root.appendChild(arrow); root.appendChild(panel);
+
+  let all = [];
+  let selected = new Set();
+  let filter = '';
+
+  function updateInputText() {
+    if (selected.size === 0) { input.value = ''; input.placeholder = placeholder; return; }
+    const labels = all.filter(o => selected.has(o.value)).map(o => o.label);
+    if (labels.length <= 2) input.value = labels.join(', ');
+    else input.value = `${labels[0]} + ${labels.length - 1} more`;
+  }
+
+  function render() {
+    const f = filter.toLowerCase();
+    panel.innerHTML = '';
+    const matches = all.filter(o => o.label.toLowerCase().includes(f));
+    if (matches.length === 0) {
+      const d = document.createElement('div');
+      d.className = 'combo-empty';
+      d.textContent = all.length === 0 ? 'No items' : 'No matches';
+      panel.appendChild(d);
+      return;
+    }
+    matches.slice(0, 300).forEach(o => {
+      const row = document.createElement('div');
+      row.className = 'combo-option';
+      row.style.display = 'flex'; row.style.alignItems = 'center'; row.style.gap = '8px';
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.checked = selected.has(o.value);
+      cb.style.pointerEvents = 'none';
+      const label = document.createElement('span'); label.textContent = o.label;
+      row.appendChild(cb); row.appendChild(label);
+      row.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        if (selected.has(o.value)) selected.delete(o.value); else selected.add(o.value);
+        cb.checked = selected.has(o.value);
+        updateInputText();
+        onChange([...selected]);
+      });
+      panel.appendChild(row);
+    });
+  }
+
+  input.addEventListener('focus', () => { filter = ''; render(); panel.classList.remove('hidden'); root.classList.add('open'); });
+  input.addEventListener('input', () => { filter = input.value; render(); panel.classList.remove('hidden'); });
+  input.addEventListener('blur', () => { setTimeout(() => { panel.classList.add('hidden'); root.classList.remove('open'); updateInputText(); }, 180); });
+  input.addEventListener('keydown', (e) => { if (e.key === 'Escape') { panel.classList.add('hidden'); input.blur(); } });
+
+  return {
+    setOptions(list) { all = list || []; selected = new Set([...selected].filter(v => all.some(o => o.value === v))); updateInputText(); },
+    setValues(arr) { selected = new Set(arr || []); updateInputText(); },
+    getValues() { return [...selected]; },
+  };
+}
+
+
 // ── Activity log ─────────────────────────────────
 function logEntry(text, type) {
   const body = $('logBody');
@@ -235,21 +315,22 @@ function splitConditions(s) {
 }
 
 function populateSubcategories() {
-  const opts = [{ value: '', label: '— all conditions —' }];
+  const opts = [];
   const set = new Set();
   state.opps.forEach(o => splitConditions(o.indication).forEach(c => set.add(c)));
   [...set].sort((a, b) => a.localeCompare(b)).forEach(c => opts.push({ value: c, label: c }));
   subcategoryCombo.setOptions(opts);
-  const saved = localStorage.getItem(`denali.subcategory.${state.category}`);
-  const valid = saved && opts.some(o => o.value === saved);
-  subcategoryCombo.setValue(valid ? saved : '');
-  state.subcategory = valid ? saved : '';
+  let saved = [];
+  try { saved = JSON.parse(localStorage.getItem(`denali.subcategory.${state.category}`) || '[]'); } catch {}
+  const valid = (saved || []).filter(v => opts.some(o => o.value === v));
+  subcategoryCombo.setValues(valid);
+  state.subcategory = valid;
 }
 
 function filteredOpps() {
-  if (!state.subcategory) return state.opps;
-  const t = state.subcategory.toLowerCase();
-  return state.opps.filter(o => splitConditions(o.indication).some(c => c.toLowerCase() === t));
+  if (!state.subcategory || state.subcategory.length === 0) return state.opps;
+  const wanted = new Set(state.subcategory.map(s => s.toLowerCase()));
+  return state.opps.filter(o => splitConditions(o.indication).some(c => wanted.has(c.toLowerCase())));
 }
 
 function renderOpportunityDropdown() {
@@ -942,9 +1023,9 @@ window.addEventListener('DOMContentLoaded', async () => {
   categoryCombo = makeCombo('categoryCombo', 'Type to search categories…', (val) => {
     state.category = val; loadCategoryData();
   });
-  subcategoryCombo = makeCombo('subcategoryCombo', 'All conditions (type to filter)', (val) => {
-    state.subcategory = val;
-    if (state.category) localStorage.setItem(`denali.subcategory.${state.category}`, val);
+  subcategoryCombo = makeMultiCombo('subcategoryCombo', 'All conditions (tick to filter)', (vals) => {
+    state.subcategory = vals;
+    if (state.category) localStorage.setItem(`denali.subcategory.${state.category}`, JSON.stringify(vals));
     renderOpportunityDropdown();
   });
   oppCombo = makeCombo('oppCombo', 'Type to search trials…', (val) => loadOpportunity(val));
