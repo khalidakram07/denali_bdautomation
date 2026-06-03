@@ -76,6 +76,7 @@ def open_sheet(sheet_id: str) -> gspread.Spreadsheet:
 def read_tab_as_dicts(sheet_id: str, tab_name: str) -> list[dict]:
     """
     Return all data rows from a tab as a list of dicts keyed by header.
+    Robust to trailing blank header cells and duplicate header names.
     Returns [] if the tab is empty.
     """
     sh = open_sheet(sheet_id)
@@ -84,7 +85,31 @@ def read_tab_as_dicts(sheet_id: str, tab_name: str) -> list[dict]:
     except gspread.WorksheetNotFound:
         log.warning("Tab not found: %r in sheet %s", tab_name, sheet_id)
         return []
-    return ws.get_all_records()   # uses row 1 as headers
+    rows = ws.get_all_values()
+    if not rows:
+        return []
+    raw = [str(h).strip() for h in rows[0]]
+    # Drop trailing empty header columns
+    while raw and raw[-1] == "":
+        raw.pop()
+    # Deduplicate empty / repeated header names so we never lose a column
+    seen, headers = {}, []
+    for i, h in enumerate(raw):
+        name = h or f"col_{i}"
+        if name in seen:
+            seen[name] += 1
+            name = f"{name}_{seen[name]}"
+        else:
+            seen[name] = 1
+        headers.append(name)
+    out = []
+    for r in rows[1:]:
+        cells = list(r)[:len(headers)]
+        if all((v is None or v == "") for v in cells):
+            continue
+        d = {headers[i]: (cells[i] if i < len(cells) else "") for i in range(len(headers))}
+        out.append(d)
+    return out
 
 
 def append_to_sent_log(sheet_id: str, row: dict) -> None:
