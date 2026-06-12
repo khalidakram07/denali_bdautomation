@@ -24,7 +24,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from database import init_db
-from routers import campaigns, contacts, drafts, leads, opportunities, sync
+from routers import campaigns, contacts, drafts, hubspot_admin, leads, opportunities, sync
 from services.auth import BasicAuthMiddleware
 from services import scheduler as sheets_scheduler
 
@@ -94,6 +94,7 @@ app.include_router(drafts.router,        prefix="/api/drafts",        tags=["dra
 app.include_router(campaigns.router,     prefix="/api/campaigns",     tags=["campaigns"])
 app.include_router(sync.router,          prefix="/api/sync",          tags=["sync"])
 app.include_router(leads.router,         prefix="/api/leads",         tags=["leads"])
+app.include_router(hubspot_admin.router, prefix="/api/hubspot-admin", tags=["hubspot-admin"])
 
 
 # ── Health check ────────────────────────────────

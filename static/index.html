@@ -18,6 +18,80 @@
 .combo-option:hover, .combo-option.active { background: #eef4ff; }
 .combo-empty { padding: 7px 10px; font-size: 12px; color: #9ca3af; font-style: italic; }
 #oppCombo { min-width: 360px; }
+
+/* ── Phase 2: metric tiles, recent feed, filter bar, side panel ── */
+.metric-strip { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; max-width: 1100px; margin: 16px auto 0; padding: 0 24px; }
+.metric-tile  { background: #fff; border: 1px solid var(--rule, #e5e7eb); border-radius: 10px; padding: 14px 16px; }
+.m-label      { font-size: 10px; font-family: 'DM Mono', monospace; color: #6b7280; text-transform: uppercase; letter-spacing: 0.8px; }
+.m-value      { font-family: 'DM Serif Display', serif; font-size: 30px; line-height: 1.1; margin-top: 4px; }
+.m-sub        { font-size: 11px; color: #6b7280; margin-top: 4px; }
+
+.cat-strip    { max-width: 1100px; margin: 10px auto 0; padding: 0 24px; display: flex; gap: 8px; overflow-x: auto; }
+.cat-tile     { background: #fff; border: 1px solid var(--rule, #e5e7eb); border-radius: 8px; padding: 8px 12px; min-width: 140px; flex-shrink: 0; cursor: pointer; }
+.cat-tile:hover { border-color: #2563eb; }
+.cat-tile .cn { font-size: 12px; font-weight: 600; color: #1a1f2e; }
+.cat-tile .cm { font-size: 11px; color: #6b7280; font-family: 'DM Mono', monospace; margin-top: 2px; }
+
+.recent-strip { max-width: 1100px; margin: 14px auto 0; padding: 0 24px; }
+.recent-card  { background: #fff; border: 1px solid var(--rule, #e5e7eb); border-radius: 10px; overflow: hidden; }
+.recent-head  { padding: 10px 16px; border-bottom: 1px solid var(--rule, #e5e7eb); background: #fcfcfa; display: flex; justify-content: space-between; align-items: center; font-size: 11px; font-family: 'DM Mono', monospace; color: #6b7280; text-transform: uppercase; letter-spacing: 0.8px; }
+.recent-list  { max-height: 220px; overflow-y: auto; }
+.recent-row   { padding: 10px 16px; border-top: 1px solid #f3f4f6; display: grid; grid-template-columns: 84px 1fr 110px; gap: 12px; align-items: center; font-size: 13px; cursor: pointer; }
+.recent-row:first-child { border-top: none; }
+.recent-row:hover { background: #fafaf7; }
+.recent-row .t { font-family: 'DM Mono', monospace; font-size: 11px; color: #6b7280; }
+.recent-row .s { font-weight: 500; color: #1a1f2e; }
+.recent-row .m { font-size: 11px; color: #6b7280; margin-top: 2px; }
+.recent-row .p { text-align: right; }
+
+.filter-bar   { padding: 10px 16px; border-bottom: 1px solid var(--rule, #e5e7eb); background: #fcfcfa; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.filter-bar input, .filter-bar select { padding: 6px 10px; border: 1px solid var(--rule, #d0d5dd); border-radius: 6px; font-size: 12px; font-family: inherit; background: #fff; }
+.filter-bar input[type=search] { min-width: 220px; flex: 1; }
+.filter-bar .spacer { flex: 1; }
+.filter-bar .count  { font-family: 'DM Mono', monospace; font-size: 11px; color: #6b7280; }
+
+.clickable-name { color: #2563eb; cursor: pointer; }
+.clickable-name:hover { text-decoration: underline; }
+
+.side-panel { position: fixed; top: 0; right: 0; width: 480px; max-width: 100vw; height: 100vh; background: #fff; border-left: 1px solid var(--rule, #e5e7eb); box-shadow: -4px 0 20px rgba(0,0,0,0.08); transform: translateX(100%); transition: transform 0.2s ease; overflow-y: auto; z-index: 1000; }
+.side-panel.open { transform: translateX(0); }
+.side-head  { padding: 16px 20px; border-bottom: 1px solid var(--rule, #e5e7eb); background: #fcfcfa; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; }
+.side-close { background: none; border: none; font-size: 18px; cursor: pointer; color: #6b7280; }
+.side-body  { padding: 20px; }
+.side-stats { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin: 12px 0; }
+.side-stats .metric-tile { padding: 10px 12px; }
+.side-stats .m-value { font-size: 22px; }
+.side-timeline { border-left: 2px solid var(--rule, #e5e7eb); padding-left: 16px; margin-top: 16px; }
+.side-item  { position: relative; padding-bottom: 16px; }
+.side-item::before { content: ''; position: absolute; left: -23px; top: 6px; width: 10px; height: 10px; border-radius: 50%; background: #15803d; border: 2px solid #fff; box-shadow: 0 0 0 1px #15803d; }
+.side-time  { font-family: 'DM Mono', monospace; font-size: 11px; color: #6b7280; }
+.side-subj  { font-weight: 600; font-size: 13px; margin: 2px 0; }
+.side-trial { font-size: 12px; color: #4b5563; }
+
+
+.topbar { display: flex; align-items: center; gap: 24px; }
+.topbar-tabs { display: flex; gap: 4px; margin-left: auto; margin-right: auto; }
+.tab-btn { background: transparent; color: rgba(255,255,255,0.7); border: none; padding: 8px 14px; cursor: pointer; font-family: inherit; font-size: 13px; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.tab-btn:hover { color: #fff; }
+.tab-btn.active { color: #fff; border-bottom-color: #10b981; font-weight: 600; }
+
+.page { display: none; }
+.page.active { display: block; }
+
+.analytics-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; max-width: 1100px; margin: 14px auto 0; padding: 0 24px; }
+.analytics-grid .panel { margin: 0; }
+.analytics-full { max-width: 1100px; margin: 14px auto 0; padding: 0 24px; }
+.bar-row { display: grid; grid-template-columns: 200px 1fr 60px; gap: 10px; align-items: center; padding: 6px 12px; font-size: 12px; }
+.bar-track { background: #f3f4f6; border-radius: 4px; height: 16px; overflow: hidden; }
+.bar-fill  { background: #15803d; height: 100%; }
+.bar-value { text-align: right; font-family: 'DM Mono', monospace; color: #4b5563; font-size: 12px; }
+.recip-row { padding: 8px 14px; border-top: 1px solid #f3f4f6; display: grid; grid-template-columns: 1fr 60px; gap: 10px; align-items: center; cursor: pointer; }
+.recip-row:first-child { border-top: none; }
+.recip-row:hover { background: #fafaf7; }
+.recip-name { font-size: 13px; font-weight: 500; color: #1a1f2e; }
+.recip-sub  { font-size: 11px; color: #6b7280; margin-top: 1px; }
+.recip-count { text-align: right; font-family: 'DM Mono', monospace; font-size: 13px; color: #15803d; }
+
 </style>
 </head>
 <body>
@@ -28,11 +102,17 @@
     <div class="dot"></div>
     Denali Health — BD Automation
   </div>
+  <div class="topbar-tabs">
+    <button class="tab-btn active" data-tab="outreach">📨 Outreach</button>
+    <button class="tab-btn"        data-tab="analytics">📈 Analytics</button>
+  </div>
   <div class="topbar-meta">
     <span id="liveBadge" class="live-badge">LIVE</span>
     <span>Phase 1 MVP</span>
   </div>
 </div>
+
+<div id="page-outreach" class="page active">
 
 <!-- ── CONTROLS BAR ────────────────────────────── -->
 <div class="controls">
@@ -240,6 +320,64 @@
       <div class="log-body" id="logBody"></div>
     </div>
 
+
+  </div>
+</div>
+
+</div> <!-- /#page-outreach -->
+
+
+<!-- ──────────────── ANALYTICS PAGE ──────────────── -->
+<div id="page-analytics" class="page">
+
+  <div class="metric-strip">
+    <div class="metric-tile"><div class="m-label">Sent today</div>     <div class="m-value" id="mSentToday">—</div>     <div class="m-sub" id="mSentTodaySub">&nbsp;</div></div>
+    <div class="metric-tile"><div class="m-label">Sent this week</div> <div class="m-value" id="mSentThisWeek">—</div> <div class="m-sub" id="mSentThisWeekSub">&nbsp;</div></div>
+    <div class="metric-tile"><div class="m-label">Sent this month</div><div class="m-value" id="mSentThisMonth">—</div><div class="m-sub" id="mSentThisMonthSub">&nbsp;</div></div>
+    <div class="metric-tile"><div class="m-label">Active leads</div>   <div class="m-value" id="mActiveLeads">—</div>   <div class="m-sub" id="mActiveLeadsSub">load a category to populate</div></div>
+  </div>
+
+  <div class="cat-strip" id="catStrip"></div>
+
+  <div class="recent-strip">
+    <div class="recent-card">
+      <div class="recent-head">
+        <span>Recent outreach · last 5 sends</span>
+        <span id="recentEmpty" class="hidden" style="text-transform:none;">No sends yet — approve a draft to see it here.</span>
+      </div>
+      <div class="recent-list" id="recentList"></div>
+    </div>
+  </div>
+
+  <div class="analytics-grid">
+    <!-- Per-mailbox -->
+    <div class="panel">
+      <div class="panel-header">
+        <div>
+          <div class="panel-label">Team activity · last 30 days</div>
+          <div class="panel-title">Who sent how many</div>
+        </div>
+      </div>
+      <div id="mailboxBars" style="padding:10px 0;">
+        <div style="padding:14px;text-align:center;color:#6b7280;font-size:12px;">No sends yet.</div>
+      </div>
+    </div>
+    <!-- Top recipients -->
+    <div class="panel">
+      <div class="panel-header">
+        <div>
+          <div class="panel-label">Most contacted · last 90 days</div>
+          <div class="panel-title">Top recipients</div>
+        </div>
+      </div>
+      <div id="topRecipients">
+        <div style="padding:14px;text-align:center;color:#6b7280;font-size:12px;">No sends yet.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Filterable Send History (moved from main) -->
+  <div class="analytics-full">
     <!-- Send history -->
     <div class="panel" id="sendHistoryPanel">
       <div class="panel-header">
@@ -249,15 +387,58 @@
         </div>
         <button id="refreshHistoryBtn" class="btn btn-secondary" style="padding:6px 12px;font-size:12px;">↻ Refresh</button>
       </div>
+      <div class="filter-bar">
+        <input type="search" id="histSearch" placeholder="Search contact, company, trial, subject…" autocomplete="off" />
+        <select id="histCategory"><option value="">All categories</option></select>
+        <select id="histMailbox"><option value="">All mailboxes</option></select>
+        <select id="histStatus">
+          <option value="">All statuses</option>
+          <option value="sent">Sent</option>
+          <option value="failed">Failed</option>
+          <option value="bounced">Bounced</option>
+          <option value="replied">Replied</option>
+        </select>
+        <select id="histRange">
+          <option value="">Any time</option>
+          <option value="7">Last 7 days</option>
+          <option value="30" selected>Last 30 days</option>
+          <option value="90">Last 90 days</option>
+          <option value="365">Last year</option>
+        </select>
+        <div class="spacer"></div>
+        <span class="count" id="histCount">—</span>
+      </div>
       <div id="sendHistoryBody" style="max-height:360px;overflow-y:auto;">
         <div style="padding:20px;text-align:center;color:var(--ink-soft);font-size:13px;" id="sendHistoryEmpty">
           No emails sent yet — approve a draft with a mailbox selected to see it here.
         </div>
       </div>
     </div>
-
   </div>
-</div>
+
+</div> <!-- /#page-analytics -->
+
+
+<!-- ── Phase 2 CONTACT HISTORY SIDE PANEL ─────── -->
+<aside class="side-panel" id="sidePanel" aria-hidden="true">
+  <div class="side-head">
+    <div>
+      <div class="m-label">Contact history</div>
+      <div id="sideName" style="font-family:'DM Serif Display',serif;font-size:18px;">—</div>
+      <div id="sideTitle" style="font-size:12px;color:#4b5563;margin-top:2px;">&nbsp;</div>
+    </div>
+    <button class="side-close" id="sideClose" title="Close">✕</button>
+  </div>
+  <div class="side-body">
+    <div class="side-stats">
+      <div class="metric-tile"><div class="m-label">Emails sent</div><div class="m-value" id="sideSent">—</div></div>
+      <div class="metric-tile"><div class="m-label">Replies</div>    <div class="m-value" id="sideReplied">—</div></div>
+      <div class="metric-tile"><div class="m-label">Categories</div> <div class="m-value" id="sideCats">—</div></div>
+    </div>
+    <div class="m-label" style="margin-top:14px;">Timeline</div>
+    <div class="side-timeline" id="sideTimeline"></div>
+  </div>
+</aside>
 
 <script src="/static/app.js"></script>
 </body>

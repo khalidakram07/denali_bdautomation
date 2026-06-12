@@ -845,7 +845,7 @@ function renderSendHistory(sends) {
           <div class="send-meta">
             ${escapeHtml(s.from_mailbox_email || '?')}<span class="arrow">→</span>${escapeHtml(s.recipient_email || '?')}${overrideTag}
             <br>
-            <span style="opacity:0.7;">${escapeHtml(s.opportunity_title || '')}  ·  ${escapeHtml(s.contact_name || '')}</span>
+            <span style="opacity:0.7;">${escapeHtml(s.opportunity_title || '')}  ·  <span class="clickable-name" data-email="${escapeHtml(s.recipient_email || '')}">${escapeHtml(s.contact_name || '')}</span></span>
           </div>
         </div>
         <div class="send-status-pill ${escapeHtml(s.send_status || 'queued')}">${escapeHtml((s.send_status || 'queued').toUpperCase())}</div>
@@ -981,6 +981,11 @@ async function onApprove() {
       logEntry(`${mode}: ${send.sent_via} → ${send.to}${overrideTag}${attachTag}  msg-id=${send.message_id}`, 'ok');
       loadSendHistory();   // refresh the history panel so the new row shows up
       softRefreshCategory();   // sent contact disappears from the dropdown
+      // Refresh analytics widgets only if that tab is visible.
+      const aPage = document.getElementById('page-analytics');
+      if (aPage && aPage.classList.contains('active')) {
+        loadMetrics(); loadRecentOutreach(); loadMailboxBars(); loadTopRecipients(); loadHistoryFiltered();
+      }
     } else {
       logEntry('Draft approved (no mailbox selected — not sent)', 'sys');
     }
@@ -1072,4 +1077,310 @@ window.addEventListener('DOMContentLoaded', async () => {
   await loadSendHistory();
   await pollLog();
   state.logPollInterval = setInterval(pollLog, 2000);
+  _phase2Init();
+});
+
+
+// ──────────────────────────────────────────────────────────────
+// Phase 2: metric tiles, per-category strip, Recent Outreach feed,
+// filterable Send History, per-contact side panel.
+// ──────────────────────────────────────────────────────────────
+
+function _fmt(n) { return n == null ? '—' : String(n); }
+function _shortTime(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (isNaN(d)) return iso;
+  const now = new Date();
+  const sameDay = d.toDateString() === now.toDateString();
+  if (sameDay) return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const days = Math.floor((now - d) / 86400000);
+  if (days <= 7) return d.toLocaleDateString([], { weekday: 'short' }) + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+}
+
+async function loadMetrics() {
+  try {
+    const m = await API.get('/api/campaigns/metrics');
+    $('mSentToday').textContent      = _fmt(m.sent_today);
+    $('mSentThisWeek').textContent   = _fmt(m.sent_this_week);
+    $('mSentThisMonth').textContent  = _fmt(m.sent_this_month);
+    $('mActiveLeads').textContent    = _fmt(m.active_leads);
+    $('mSentTodaySub').textContent     = `of ${m.sent_total} total all-time`;
+    $('mSentThisWeekSub').textContent  = `since Monday`;
+    $('mSentThisMonthSub').textContent = `since the 1st`;
+    $('mActiveLeadsSub').textContent   = m.active_leads == null
+      ? 'load a category to populate'
+      : 'across loaded categories';
+    // Per-category strip
+    const strip = $('catStrip');
+    strip.innerHTML = '';
+    (m.by_category || []).forEach(c => {
+      const tile = document.createElement('div');
+      tile.className = 'cat-tile';
+      tile.innerHTML = `<div class="cn">${escapeHtml(c.name)}</div><div class="cm">${c.sent_this_week} this week · ${c.sent_total} total</div>`;
+      tile.addEventListener('click', () => {
+        // jump send-history filter to that category
+        const sel = $('histCategory');
+        if (sel) { sel.value = c.name; loadHistoryFiltered(); }
+      });
+      strip.appendChild(tile);
+    });
+  } catch (err) {
+    console.warn('metrics failed:', err);
+  }
+}
+
+async function loadRecentOutreach() {
+  try {
+    const data = await API.get('/api/campaigns/sent-history?limit=5');
+    const list = $('recentList');
+    list.innerHTML = '';
+    const sends = data.sends || [];
+    if (sends.length === 0) {
+      $('recentEmpty').classList.remove('hidden');
+      return;
+    }
+    $('recentEmpty').classList.add('hidden');
+    sends.forEach(s => {
+      const row = document.createElement('div');
+      row.className = 'recent-row';
+      const status = (s.send_status || 'sent').toUpperCase();
+      row.innerHTML = `
+        <div class="t">${escapeHtml(_shortTime(s.sent_at))}</div>
+        <div>
+          <div class="s">${escapeHtml(s.subject || '(no subject)')}</div>
+          <div class="m"><span class="clickable-name" data-email="${escapeHtml(s.recipient_email || '')}">${escapeHtml(s.contact_name || s.recipient_email || '—')}</span> · ${escapeHtml(s.sponsor_name || s.opportunity_title || '')} · ${escapeHtml(s.category || '')}</div>
+        </div>
+        <div class="p"><span class="meta-chip">${escapeHtml(status)}</span></div>
+      `;
+      row.querySelector('.clickable-name').addEventListener('click', (e) => {
+        e.stopPropagation();
+        openContactPanel(e.currentTarget.dataset.email);
+      });
+      list.appendChild(row);
+    });
+  } catch (err) {
+    console.warn('recent outreach failed:', err);
+  }
+}
+
+// ── Filterable send history ──────────────────────────────
+function _populateHistFilters() {
+  // Mailboxes
+  const mbSel = $('histMailbox');
+  if (mbSel && mbSel.options.length <= 1) {
+    fetch('/api/campaigns/mailboxes').then(r => r.json()).then(d => {
+      (d.mailboxes || []).forEach(m => {
+        const o = document.createElement('option');
+        o.value = m.email; o.textContent = m.display_name || m.email;
+        mbSel.appendChild(o);
+      });
+    }).catch(() => {});
+  }
+  // Categories from /api/leads/categories
+  const catSel = $('histCategory');
+  if (catSel && catSel.options.length <= 1) {
+    fetch('/api/leads/categories').then(r => r.json()).then(d => {
+      (d.categories || []).forEach(c => {
+        const o = document.createElement('option');
+        o.value = c.name; o.textContent = c.name;
+        catSel.appendChild(o);
+      });
+    }).catch(() => {});
+  }
+}
+
+let _histDebounce = null;
+function _scheduleHistory() {
+  if (_histDebounce) clearTimeout(_histDebounce);
+  _histDebounce = setTimeout(loadHistoryFiltered, 250);
+}
+
+async function loadHistoryFiltered() {
+  const search   = ($('histSearch')?.value || '').trim();
+  const category = $('histCategory')?.value || '';
+  const mailbox  = $('histMailbox')?.value  || '';
+  const status   = $('histStatus')?.value   || '';
+  const range    = $('histRange')?.value    || '';
+  const params = new URLSearchParams({ limit: '100' });
+  if (search)   params.set('search', search);
+  if (category) params.set('category', category);
+  if (mailbox)  params.set('mailbox', mailbox);
+  if (status)   params.set('status', status);
+  if (range) {
+    const from = new Date(Date.now() - parseInt(range, 10) * 86400000);
+    params.set('date_from', from.toISOString().slice(0, 19));
+  }
+  try {
+    const data = await API.get(`/api/campaigns/sent-history?${params}`);
+    renderSendHistory(data.sends || []);
+    const c = $('histCount');
+    if (c) c.textContent = `${data.count || 0} shown`;
+  } catch (err) {
+    logEntry(`History load failed: ${err.message}`, 'err');
+  }
+}
+
+// ── Per-contact side panel ──────────────────────────────
+async function openContactPanel(email) {
+  if (!email) return;
+  const panel = $('sidePanel');
+  panel.classList.add('open');
+  panel.setAttribute('aria-hidden', 'false');
+  $('sideName').textContent  = email;
+  $('sideTitle').textContent = '…loading…';
+  $('sideSent').textContent = '—';
+  $('sideReplied').textContent = '—';
+  $('sideCats').textContent = '—';
+  $('sideTimeline').innerHTML = '';
+  try {
+    const data = await API.get(`/api/campaigns/contact-history?email=${encodeURIComponent(email)}`);
+    $('sideName').textContent  = data.contact_name || email;
+    $('sideTitle').textContent = data.contact_title || email;
+    const sends = data.sends || [];
+    const replied = sends.filter(s => s.send_status === 'replied').length;
+    const cats = new Set(sends.map(s => s.category).filter(Boolean));
+    $('sideSent').textContent    = sends.length;
+    $('sideReplied').textContent = replied;
+    $('sideCats').textContent    = cats.size;
+    const tl = $('sideTimeline');
+    tl.innerHTML = '';
+    if (sends.length === 0) {
+      tl.innerHTML = '<div style="font-size:13px;color:#6b7280;">No prior sends to this address.</div>';
+      return;
+    }
+    sends.forEach(s => {
+      const item = document.createElement('div');
+      item.className = 'side-item';
+      item.innerHTML = `
+        <div class="side-time">${escapeHtml(_shortTime(s.sent_at))} · ${escapeHtml((s.from_mailbox_email || '').split('@')[0] || '?')} → ${escapeHtml(s.recipient_email || '')}</div>
+        <div class="side-subj">${escapeHtml(s.subject || '(no subject)')}</div>
+        <div class="side-trial">${escapeHtml(s.sponsor_name || s.opportunity_title || '')} · ${escapeHtml(s.category || '')}</div>
+      `;
+      tl.appendChild(item);
+    });
+  } catch (err) {
+    $('sideTimeline').innerHTML = `<div style="color:#b91c1c;font-size:13px;">Couldn't load: ${escapeHtml(err.message)}</div>`;
+  }
+}
+function closeContactPanel() {
+  const p = $('sidePanel');
+  p.classList.remove('open');
+  p.setAttribute('aria-hidden', 'true');
+}
+
+// ── Phase 2 init: hooks + first load + auto-refresh ──────
+function _phase2Init() {
+  // Close button + Escape
+  const sc = $('sideClose'); if (sc) sc.addEventListener('click', closeContactPanel);
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeContactPanel(); });
+  // Filter listeners
+  ['histSearch','histCategory','histMailbox','histStatus','histRange'].forEach(id => {
+    const el = $(id); if (!el) return;
+    el.addEventListener(id === 'histSearch' ? 'input' : 'change', _scheduleHistory);
+  });
+  // Analytics widgets only load when the Analytics tab is opened (see switchTab).
+  // Pre-populate filter dropdowns so they're ready when user switches tabs.
+  _populateHistFilters();
+}
+
+// Hook a contact-name click everywhere on the page (event delegation for already-rendered names).
+document.addEventListener('click', (e) => {
+  const t = e.target.closest('.clickable-name');
+  if (t && t.dataset.email) {
+    e.preventDefault();
+    openContactPanel(t.dataset.email);
+  }
+});
+
+
+/* ───────────── Phase 2.1: Analytics tab + widgets ───────────── */
+
+let _analyticsLoaded = false;
+let _analyticsTimer  = null;
+
+function switchTab(tab) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  document.querySelectorAll('.page').forEach(p => p.classList.toggle('active', p.id === ('page-' + tab)));
+  if (tab === 'analytics') {
+    loadAnalytics(true);
+    if (!_analyticsTimer) _analyticsTimer = setInterval(() => loadAnalytics(false), 60000);
+  } else {
+    if (_analyticsTimer) { clearInterval(_analyticsTimer); _analyticsTimer = null; }
+  }
+}
+
+async function loadAnalytics(includeHistory) {
+  try {
+    if (typeof loadMetrics         === 'function') await loadMetrics();
+    if (typeof loadRecentOutreach  === 'function') await loadRecentOutreach();
+    await loadMailboxBars();
+    await loadTopRecipients();
+    if (includeHistory && typeof loadHistoryFiltered === 'function') {
+      if (typeof _populateHistFilters === 'function') _populateHistFilters();
+      loadHistoryFiltered();
+    }
+    _analyticsLoaded = true;
+  } catch (e) { console.error('analytics load failed', e); }
+}
+
+async function loadMailboxBars() {
+  const el = document.getElementById('mailboxBars');
+  if (!el) return;
+  try {
+    const r = await fetch('/api/campaigns/by-mailbox?days=30');
+    const data = await r.json();
+    const rows = data.by_mailbox || [];
+    if (!rows.length) {
+      el.innerHTML = '<div style="padding:14px;text-align:center;color:#6b7280;font-size:12px;">No sends in last 30 days.</div>';
+      return;
+    }
+    const max = Math.max(...rows.map(r => r.sent || 0)) || 1;
+    el.innerHTML = rows.map(r => {
+      const pct = Math.round(((r.sent || 0) / max) * 100);
+      const mb  = (r.mailbox || '—').split('@')[0];
+      return '<div class="bar-row">' +
+               '<div title="' + (r.mailbox || '') + '">' + mb + '</div>' +
+               '<div class="bar-track"><div class="bar-fill" style="width:' + pct + '%"></div></div>' +
+               '<div class="bar-value">' + (r.sent || 0) + '</div>' +
+             '</div>';
+    }).join('');
+  } catch (e) {
+    el.innerHTML = '<div style="padding:14px;text-align:center;color:#dc2626;font-size:12px;">Failed to load.</div>';
+  }
+}
+
+async function loadTopRecipients() {
+  const el = document.getElementById('topRecipients');
+  if (!el) return;
+  try {
+    const r = await fetch('/api/campaigns/top-recipients?days=90&limit=15');
+    const data = await r.json();
+    const rows = data.recipients || [];
+    if (!rows.length) {
+      el.innerHTML = '<div style="padding:14px;text-align:center;color:#6b7280;font-size:12px;">No sends in last 90 days.</div>';
+      return;
+    }
+    el.innerHTML = rows.map(r => {
+      const name = r.contact_name || r.email;
+      const sub  = [r.contact_title, r.sponsor_name].filter(Boolean).join(' · ') || r.email;
+      const safe = (r.email || '').replace(/'/g, "&#39;");
+      return '<div class="recip-row" onclick="openContactPanel(\'' + safe + '\')">' +
+               '<div>' +
+                 '<div class="recip-name clickable-name">' + name + '</div>' +
+                 '<div class="recip-sub">' + sub + '</div>' +
+               '</div>' +
+               '<div class="recip-count">' + r.sent + '</div>' +
+             '</div>';
+    }).join('');
+  } catch (e) {
+    el.innerHTML = '<div style="padding:14px;text-align:center;color:#dc2626;font-size:12px;">Failed to load.</div>';
+  }
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+  });
 });
