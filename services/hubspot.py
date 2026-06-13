@@ -379,3 +379,91 @@ def advance_deal_stage(deal_id: str, stage_label: str,
     if extra_props:
         props.update(extra_props)
     _request("PATCH", f"/crm/v3/objects/deals/{deal_id}", json={"properties": props})
+
+
+# ─────────────────────────────────────────────────────────────
+# Part C — Reply classification + read helpers
+# ─────────────────────────────────────────────────────────────
+
+_CLASSIFY_PROMPT = """You read one reply email from a prospective clinical trial site
+investigator and return EXACTLY ONE label from this list:
+
+interested      → wants to learn more, asks questions, says yes, books a call
+not_interested  → declines, says no thanks, says they don't take outreach
+wrong_contact   → says "I'm not the right person", suggests forwarding to someone else
+out_of_office   → auto-reply about being away, vacation responder, ooo
+opt_out         → asks to be removed, unsubscribed, never contacted again
+
+Return ONLY the label, lowercase, no other text.
+
+REPLY:
+---
+{body}
+---"""
+
+
+def classify_reply(body: str) -> str:
+    """Send reply text to Claude Haiku, return one of the 5 labels."""
+    body = (body or "").strip()
+    if not body:
+        return "no_response"
+    try:
+        from anthropic import Anthropic
+        api_key = os.getenv("ANTHROPIC_API_KEY", "")
+        if not api_key:
+            log.warning("ANTHROPIC_API_KEY not set — defaulting reply to 'interested'")
+            return "interested"
+        client = Anthropic(api_key=api_key)
+        model = os.getenv("ANTHROPIC_CLASSIFIER_MODEL", "claude-haiku-4-5-20251001")
+        msg = client.messages.create(
+            model=model, max_tokens=20,
+            messages=[{"role": "user", "content": _CLASSIFY_PROMPT.format(body=body[:4000])}],
+        )
+        label = (msg.content[0].text or "").strip().lower().split()[0]
+        if label not in {"interested", "not_interested", "wrong_contact", "out_of_office", "opt_out"}:
+            log.warning("classifier returned unrecognised label %r — defaulting interested", label)
+            label = "interested"
+        return label
+    except Exception as e:
+        log.exception("classify_reply failed, defaulting interested: %s", e)
+        return "interested"
+
+
+def get_engagement(engagement_id: str) -> dict[str, Any]:
+    """Fetch a single email engagement by ID (legacy /engagements/v1 API)."""
+    return _request("GET", f"/engagements/v1/engagements/{engagement_id}")
+
+
+def find_latest_deal_for_contact(contact_id: str) -> str | None:
+    """Return the most recent Deal ID linked to this Contact, in our pipeline."""
+    res = _request(
+        "GET",
+        f"/crm/v4/objects/contacts/{contact_id}/associations/deals",
+        params={"limit": 50},
+    )
+    deal_ids = [r["toObjectId"] for r in res.get("results", []) if r.get("toObjectId")]
+    if not deal_ids:
+        return None
+    pid = get_pipeline_id()
+    # batch read to filter by pipeline
+    batch = _request(
+        "POST", "/crm/v3/objects/deals/batch/read",
+        json={"properties": ["pipeline", "hs_lastmodifieddate"],
+              "inputs": [{"id": str(d)} for d in deal_ids]},
+    )
+    candidates = [d for d in batch.get("results", []) if d.get("properties", {}).get("pipeline") == pid]
+    if not candidates:
+        return None
+    candidates.sort(key=lambda d: d.get("properties", {}).get("hs_lastmodifieddate", ""), reverse=True)
+    return str(candidates[0]["id"])
+
+
+# Mapping: classifier label → (Deal stage to advance to, contact reply_status)
+REPLY_TRANSITIONS: dict[str, dict[str, Any]] = {
+    "interested":     {"stage": "Qualification",   "contact_status": "interested",     "stop_cadence": True},
+    "not_interested": {"stage": "Lost / Closed",   "contact_status": "not_interested", "stop_cadence": True},
+    "wrong_contact":  {"stage": None,              "contact_status": "wrong_contact",  "stop_cadence": False},
+    "out_of_office":  {"stage": None,              "contact_status": "out_of_office",  "stop_cadence": False},
+    "opt_out":        {"stage": "Lost / Closed",   "contact_status": "opt_out",        "stop_cadence": True,
+                       "extra_contact_props": {"opted_out": "true"}},
+}
