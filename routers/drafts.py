@@ -357,6 +357,58 @@ async def approve_draft(
         except Exception as e:
             log.exception("mark_lead_sent failed (email still sent successfully): %s", e)
 
+        # ── Part B: push to HubSpot (best-effort, never blocks the send) ──
+        hubspot_info = {"contact_id": None, "deal_id": None, "engagement_id": None, "error": None}
+        try:
+            from services import hubspot as hs
+            contact_props = {}
+            if draft_data.get("contact_name"):
+                parts = draft_data["contact_name"].strip().split(" ", 1)
+                contact_props["firstname"] = parts[0]
+                if len(parts) > 1:
+                    contact_props["lastname"] = parts[1]
+            if draft_data.get("contact_title"):
+                contact_props["jobtitle"]         = draft_data["contact_title"]
+            if draft_data.get("sponsor_name"):
+                contact_props["site_institution"] = draft_data["sponsor_name"]
+            contact_props["preferred_mailbox"]    = result.sent_via or ""
+
+            contact_id = hs.upsert_contact(final_to, contact_props)
+
+            deal_props = {
+                "indication":            draft_data.get("category") or "",
+                "denali_category":       draft_data.get("category") or "",
+                "primary_contact_email": final_to,
+            }
+            if draft_data.get("trial_title"):
+                deal_props["dealname"] = f"{draft_data.get('sponsor_name','')} — {draft_data['trial_title']}".strip(" —")
+            deal_id = hs.upsert_deal(
+                nct_id     = draft_data.get("trial_id") or "",
+                sponsor    = draft_data.get("sponsor_name") or "",
+                properties = deal_props,
+                stage_label= "Outreach Needed",
+                contact_id = contact_id,
+            )
+
+            engagement_id = hs.log_email_engagement(
+                contact_id  = contact_id,
+                subject     = final_subject,
+                body_html   = final_body,
+                from_email  = result.sent_via or "",
+                to_email    = final_to,
+                deal_id     = deal_id,
+            )
+            hubspot_info.update({
+                "contact_id":    contact_id,
+                "deal_id":       deal_id,
+                "engagement_id": engagement_id,
+            })
+            log.info("HubSpot push OK: contact=%s deal=%s engagement=%s",
+                     contact_id, deal_id, engagement_id)
+        except Exception as e:
+            hubspot_info["error"] = str(e)[:300]
+            log.exception("HubSpot push failed (email still sent successfully): %s", e)
+
         log_activity(
             "send", send_id, "sent",
             actor_type="system",
@@ -370,6 +422,7 @@ async def approve_draft(
                 "trial":      draft_data.get("trial_title"),
                 "attachments": attachment_names,
                 "attachment_count": result.attachment_count,
+                "hubspot":    hubspot_info,
             },
         )
 
@@ -383,6 +436,7 @@ async def approve_draft(
             "attachment": attachment_label,
             "attachment_names": attachment_names,
             "attachment_count": result.attachment_count,
+            "hubspot":    hubspot_info,
         }
 
     # 5. Return the updated draft + send info
@@ -397,28 +451,33 @@ async def approve_draft(
 
 
 # ─────────────────────────────────────────────────────────────
-# POST /api/drafts/{id}/reject
+# Reject a draft
 # ─────────────────────────────────────────────────────────────
 
 @router.post("/{draft_id}/reject", response_model=DraftRead)
-def reject_draft(draft_id: int, body: DraftReject):
+def reject_draft(draft_id: int, payload: DraftReject):
     with db_cursor() as cur:
-        cur.execute("SELECT approval_status FROM email_drafts WHERE id = ?", (draft_id,))
+        cur.execute("SELECT * FROM email_drafts WHERE id = ?", (draft_id,))
         row = cur.fetchone()
-        if not row:
-            raise HTTPException(404, f"Draft {draft_id} not found")
-        if row["approval_status"] != "pending":
-            raise HTTPException(409, f"Draft already {row['approval_status']}")
+    if not row:
+        raise HTTPException(404, "Draft not found")
+    if row["approval_status"] != ApprovalStatus.PENDING.value:
+        raise HTTPException(409, f"Draft already {row['approval_status']}")
 
+    with db_cursor() as cur:
         cur.execute(
-            "UPDATE email_drafts SET approval_status='rejected', rejection_reason=? WHERE id = ?",
-            (body.rejection_reason, draft_id),
+            """
+            UPDATE email_drafts
+            SET approval_status = ?, rejection_reason = ?, reviewer = ?, reviewed_at = ?
+            WHERE id = ?
+            """,
+            (ApprovalStatus.REJECTED.value, payload.reason, payload.reviewer,
+             datetime.utcnow().isoformat(timespec="seconds"), draft_id),
         )
         cur.execute("SELECT * FROM email_drafts WHERE id = ?", (draft_id,))
         new_row = cur.fetchone()
-    log_activity(
-        "draft", draft_id, "rejected",
-        actor_type="user", actor_id=body.rejected_by,
-        metadata={"reason": body.rejection_reason},
-    )
+
+    log_activity("draft", draft_id, "rejected", actor=payload.reviewer,
+                 metadata={"reason": payload.reason})
+
     return _row_to_draft(new_row)
