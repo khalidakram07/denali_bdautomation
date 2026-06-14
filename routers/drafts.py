@@ -405,6 +405,17 @@ async def approve_draft(
             })
             log.info("HubSpot push OK: contact=%s deal=%s engagement=%s",
                      contact_id, deal_id, engagement_id)
+
+            # Part D — enroll into the sequence so D+2/D+4 follow-ups fire.
+            # Best-effort: failure does not block the send.
+            try:
+                enroll_res = hs.enroll_contact_in_sequence(
+                    contact_id   = contact_id,
+                    sender_email = result.sent_via,
+                )
+                hubspot_info["sequence_enrollment"] = enroll_res
+            except Exception as e:
+                hubspot_info["sequence_enrollment"] = {"ok": False, "error": str(e)[:200]}
         except Exception as e:
             hubspot_info["error"] = str(e)[:300]
             log.exception("HubSpot push failed (email still sent successfully): %s", e)

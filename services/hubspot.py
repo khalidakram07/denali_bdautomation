@@ -467,3 +467,45 @@ REPLY_TRANSITIONS: dict[str, dict[str, Any]] = {
     "opt_out":        {"stage": "Lost / Closed",   "contact_status": "opt_out",        "stop_cadence": True,
                        "extra_contact_props": {"opted_out": "true"}},
 }
+
+
+# ─────────────────────────────────────────────────────────────
+# Part D — Sequence auto-enrollment (HubSpot Sequences handles cadence)
+# ─────────────────────────────────────────────────────────────
+
+DEFAULT_SEQUENCE_ID = os.getenv("HUBSPOT_SEQUENCE_ID", "685892297")
+
+
+def enroll_contact_in_sequence(contact_id: str,
+                               sequence_id: str | None = None,
+                               sender_email: str | None = None) -> dict[str, Any]:
+    """
+    Enroll a Contact into a HubSpot Sequence so D+2 / D+4 follow-ups fire.
+
+    Returns {"ok": True, "enrollment_id": "..."} on success, {"ok": False, "error": "..."}
+    on failure. Never raises — caller treats this as best-effort.
+    """
+    sid = sequence_id or DEFAULT_SEQUENCE_ID
+    if not contact_id or not sid:
+        return {"ok": False, "error": "missing contact_id or sequence_id"}
+
+    payload = {
+        "sequenceId": int(sid),
+        "contactId":  int(contact_id),
+    }
+    if sender_email:
+        payload["senderEmail"] = sender_email
+
+    # HubSpot Sequences enrollment endpoint. Service Keys may not have permission
+    # for this — Sequences are user-scoped. We try anyway and surface the error.
+    try:
+        res = _request("POST", "/automation/v3/sequences/enrollments", json=payload)
+        eid = res.get("id") or res.get("enrollmentId")
+        log.info("enrolled contact %s in sequence %s → enrollment %s", contact_id, sid, eid)
+        return {"ok": True, "enrollment_id": str(eid) if eid else None}
+    except HubSpotError as e:
+        # Most common failure: 403 because Service Keys can't enroll into personal sequences.
+        # In that case the caller should fall back to manual enrollment.
+        log.warning("sequence enrollment failed (contact %s, sequence %s): %s",
+                    contact_id, sid, e)
+        return {"ok": False, "error": str(e)[:300]}
