@@ -1023,7 +1023,7 @@ async function onReject() {
 }
 
 // ── Init ─────────────────────────────────────────
-window.addEventListener('DOMContentLoaded', async () => {
+async function _initDenaliApp() {
   $('csvFile').addEventListener('change', onUpload);
   categoryCombo = makeCombo('categoryCombo', 'Type to search categories…', (val) => {
     state.category = val; loadCategoryData();
@@ -1078,7 +1078,14 @@ window.addEventListener('DOMContentLoaded', async () => {
   await pollLog();
   state.logPollInterval = setInterval(pollLog, 2000);
   _phase2Init();
-});
+}
+
+// Run immediately if DOM already loaded, otherwise wait for it.
+if (document.readyState === 'loading') {
+  window.addEventListener('DOMContentLoaded', _initDenaliApp);
+} else {
+  _initDenaliApp();
+}
 
 
 // ──────────────────────────────────────────────────────────────
