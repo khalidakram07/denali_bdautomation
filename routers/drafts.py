@@ -346,8 +346,13 @@ async def approve_draft(
                 sheet_id = next((c["sheet_id"] for c in cats if c["name"] == cat), None)
                 if sheet_id:
                     sent_at_iso = datetime.utcnow().isoformat(timespec="seconds")
-                    marked = mark_lead_sent(sheet_id, tid, final_to, sent_at_iso)
-                    log.info("mark_lead_sent for %s in %s -> %s", final_to, cat, marked)
+                    # Match by the ORIGINAL lead email (not the override) so the
+                    # right row gets the "Last Sent" stamp even when the user
+                    # overrode the To: address for a test send.
+                    lookup_email = (draft_data.get("contact_email") or final_to).strip()
+                    marked = mark_lead_sent(sheet_id, tid, lookup_email, sent_at_iso)
+                    log.info("mark_lead_sent for %s (sent to %s) in %s -> %s",
+                             lookup_email, final_to, cat, marked)
                     if save_recipient_email and final_to and draft_data.get("contact_name"):
                         from services.google_sheets import update_lead_field
                         saved = update_lead_field(sheet_id, tid, draft_data["contact_name"],
