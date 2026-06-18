@@ -441,5 +441,20 @@
 </aside>
 
 <script src="/static/app.js"></script>
+<script>
+  (function () {
+    function go() {
+      if (typeof _initDenaliApp === 'function' && !window.__denaliInited) {
+        window.__denaliInited = true;
+        try { _initDenaliApp(); } catch (e) { console.error('init failed', e); }
+      }
+    }
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', go);
+    } else {
+      setTimeout(go, 0);
+    }
+  })();
+</script>
 </body>
 </html>
