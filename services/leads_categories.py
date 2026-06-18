@@ -292,8 +292,12 @@ def build_category_view(clin_rows: list[dict], lead_rows: list[dict], category: 
     # 5. Dedupe + sort contacts within each opportunity
     for o in opps:
         o["contacts"] = _dedupe_contacts(o["contacts"])
-        # Hide leads that have already been emailed (Last Sent timestamp set)
-        o["contacts"] = [c for c in o["contacts"] if not (c.get("last_sent") or "").strip()]
+        # Suppression: if ANY contact at this trial has already been emailed,
+        # hide the whole opportunity's contact list. Avoids accidentally
+        # spamming multiple PIs at the same site/sponsor for one trial.
+        already_touched = any((c.get("last_sent") or "").strip() for c in o["contacts"])
+        if already_touched:
+            o["contacts"] = []
         o["contacts"].sort(key=lambda c: (c.get("contact_score") is None, -(c.get("contact_score") or 0)))
     # NOTE: trials without contacts are kept in the list so the full pipeline is
     # visible. They just sort to the bottom (no contact score). Maryam can still
@@ -414,8 +418,7 @@ def read_category(category_name: str, force_refresh: bool = False) -> dict:
 
 def refresh_cache() -> int:
     """Bust all in-memory caches. Returns number of cached entries cleared."""
-    global _categories_cache, _category_data_cache
-    n = (1 if _categories_cache else 0) + len(_category_data_cache)
-    _categories_cache = None
-    _category_data_cache = {}
+    n = len(_category_data_cache) + len(_category_list_cache)
+    _category_data_cache.clear()
+    _category_list_cache.clear()
     return n
