@@ -290,15 +290,17 @@ def build_category_view(clin_rows: list[dict], lead_rows: list[dict], category: 
         opps.append(synth)
 
     # 5. Dedupe + sort contacts within each opportunity
+    suppressed_opps = set()
     for o in opps:
         o["contacts"] = _dedupe_contacts(o["contacts"])
         # Suppression: if ANY contact at this trial has already been emailed,
-        # hide the whole opportunity's contact list. Avoids accidentally
-        # spamming multiple PIs at the same site/sponsor for one trial.
+        # the whole opportunity is hidden from the dropdown — audit trail
+        # lives in HubSpot's pipeline view, not here.
         already_touched = any((c.get("last_sent") or "").strip() for c in o["contacts"])
         if already_touched:
-            o["contacts"] = []
+            suppressed_opps.add(id(o))
         o["contacts"].sort(key=lambda c: (c.get("contact_score") is None, -(c.get("contact_score") or 0)))
+    opps = [o for o in opps if id(o) not in suppressed_opps]
     # NOTE: trials without contacts are kept in the list so the full pipeline is
     # visible. They just sort to the bottom (no contact score). Maryam can still
     # see the trial exists and add a contact email via the "Save typed email"
