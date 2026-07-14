@@ -344,11 +344,24 @@ def upsert_deal(nct_id: str, sponsor: str, properties: dict[str, Any],
 def log_email_engagement(contact_id: str, *, subject: str, body_html: str,
                          from_email: str, to_email: str,
                          deal_id: str | None = None,
-                         sent_at_ms: int | None = None) -> str:
+                         sent_at_ms: int | None = None,
+                         cc_emails: list[str] | None = None) -> str:
     """
     Create an Email engagement on the Contact's timeline (and Deal's, when linked).
+    cc_emails: optional list of CC addresses to record on the engagement.
     Returns the engagement ID.
     """
+    cc_meta = [{"email": e} for e in (cc_emails or []) if e and "@" in e]
+    metadata: dict = {
+        "from":    {"email": from_email},
+        "to":      [{"email": to_email}],
+        "subject": subject,
+        "html":    body_html or "",
+        "text":    "",
+    }
+    if cc_meta:
+        metadata["cc"] = cc_meta
+
     payload = {
         "engagement": {
             "active":    True,
@@ -359,13 +372,7 @@ def log_email_engagement(contact_id: str, *, subject: str, body_html: str,
             "contactIds": [int(contact_id)],
             **({"dealIds": [int(deal_id)]} if deal_id else {}),
         },
-        "metadata": {
-            "from":    {"email": from_email},
-            "to":      [{"email": to_email}],
-            "subject": subject,
-            "html":    body_html or "",
-            "text":    "",
-        },
+        "metadata": metadata,
     }
     res = _request("POST", "/engagements/v1/engagements", json=payload)
     eid = (res.get("engagement") or {}).get("id") or res.get("id")

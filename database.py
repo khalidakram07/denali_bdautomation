@@ -172,6 +172,7 @@ CREATE TABLE IF NOT EXISTS email_sends (
     recipient_email     TEXT,                            -- actual To: address used (may differ from contact.email if overridden)
     from_mailbox_email  TEXT,                            -- which mailbox sent it
     is_to_overridden    INTEGER NOT NULL DEFAULT 0,      -- 1 if recipient differs from contact.email
+    cc_emails           TEXT,                            -- comma-separated CC addresses (nullable)
     sent_at             TIMESTAMP,
     message_id          TEXT,                            -- Message-ID returned by Gmail SMTP / Instantly
     send_status   TEXT NOT NULL DEFAULT 'queued'
@@ -224,6 +225,7 @@ def init_db() -> None:
             "ALTER TABLE email_sends ADD COLUMN recipient_email     TEXT",
             "ALTER TABLE email_sends ADD COLUMN from_mailbox_email  TEXT",
             "ALTER TABLE email_sends ADD COLUMN is_to_overridden    INTEGER NOT NULL DEFAULT 0",
+            "ALTER TABLE email_sends ADD COLUMN cc_emails           TEXT",
             # Self-contained snapshot on drafts (live-Sheets model: no opp/contact rows)
             "ALTER TABLE email_drafts ADD COLUMN category        TEXT",
             "ALTER TABLE email_drafts ADD COLUMN trial_id        TEXT",

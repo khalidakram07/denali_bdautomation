@@ -205,6 +205,7 @@ async def approve_draft(
     edited_subject: Optional[str] = Form(None),
     from_mailbox: Optional[str] = Form(None),
     to_email_override: Optional[str] = Form(None),
+    cc_emails: Optional[str] = Form(None),
     attachments: list[UploadFile] = File(default=[]),
 ):
     """
@@ -213,11 +214,13 @@ async def approve_draft(
 
     Accepts multipart/form-data so one or more files can be attached at send time.
     The recipient comes from the draft's snapshot (recipient_email) unless overridden.
+    cc_emails: optional comma-separated string of CC addresses.
     """
     edited_body       = (edited_body or "").strip() or None
     edited_subject    = (edited_subject or "").strip() or None
     from_mailbox      = (from_mailbox or "").strip() or None
     to_email_override = (to_email_override or "").strip() or None
+    cc_emails_raw     = (cc_emails or "").strip() or None
 
     # Read uploaded attachments into memory as (filename, bytes)
     attachment_files: list[tuple[str, bytes]] = []
@@ -291,6 +294,16 @@ async def approve_draft(
         sender_display = (chosen_mb.get("display_name") or "").strip() \
             or f"{os.getenv('DEFAULT_SENDER_NAME', 'Maryam')} (Denali Health)"
 
+        # Normalize CC list once so we can log + push consistently.
+        from services.email_sender import _clean_email_list as _clean_cc
+        cc_list_final = _clean_cc(cc_emails_raw)
+        # Belt-and-braces: don't CC the primary recipient or the sender.
+        cc_list_final = [
+            c for c in cc_list_final
+            if c.lower() not in ((final_to or "").lower(), (from_mailbox or "").lower())
+        ]
+        cc_joined = ",".join(cc_list_final) if cc_list_final else None
+
         try:
             result = send_email(
                 from_mailbox_email = from_mailbox,
@@ -299,6 +312,7 @@ async def approve_draft(
                 body_text          = final_body,
                 sender_display_name = sender_display,
                 attachments        = attachment_files or None,
+                cc_emails          = cc_list_final or None,
             )
         except Exception as e:
             log.exception("Send failed for draft %s", draft_id)
@@ -320,8 +334,8 @@ async def approve_draft(
                 """
                 INSERT INTO email_sends
                     (draft_id, recipient_email, from_mailbox_email, is_to_overridden,
-                     sent_at, message_id, send_status)
-                VALUES (?, ?, ?, ?, ?, ?, 'sent')
+                     sent_at, message_id, send_status, cc_emails)
+                VALUES (?, ?, ?, ?, ?, ?, 'sent', ?)
                 """,
                 (
                     draft_id,
@@ -330,6 +344,7 @@ async def approve_draft(
                     1 if to_email_override else 0,
                     datetime.utcnow().isoformat(timespec="seconds"),
                     result.message_id,
+                    cc_joined,
                 ),
             )
             send_id = cur.lastrowid
@@ -402,6 +417,7 @@ async def approve_draft(
                 from_email  = result.sent_via or "",
                 to_email    = final_to,
                 deal_id     = deal_id,
+                cc_emails   = cc_list_final or None,
             )
             hubspot_info.update({
                 "contact_id":    contact_id,
@@ -431,6 +447,7 @@ async def approve_draft(
             metadata={
                 "mailbox":    result.sent_via,
                 "to":         final_to,
+                "cc":         cc_list_final,
                 "to_overridden": bool(to_email_override),
                 "dry_run":    result.dry_run,
                 "message_id": result.message_id,
@@ -448,6 +465,7 @@ async def approve_draft(
             "sent_via":   result.sent_via,
             "dry_run":    result.dry_run,
             "to":         final_to,
+            "cc":         cc_list_final,
             "to_overridden": bool(to_email_override),
             "attachment": attachment_label,
             "attachment_names": attachment_names,

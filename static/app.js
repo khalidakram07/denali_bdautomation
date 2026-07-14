@@ -500,6 +500,8 @@ function field(label, value, full = false) {
 }
 
 function renderContact(c) {
+  // Reset Cc every time contact changes — never carry it across leads.
+  if ($('ccEmailsInput')) $('ccEmailsInput').value = '';
   if (!c) {
     $('contactBody').innerHTML = '';
     $('contactConfidence').style.display = 'none';
@@ -951,6 +953,14 @@ async function onApprove() {
   const storedTo   = (state.primaryContact && state.primaryContact.email) || '';
   const toOverride = (enteredTo && enteredTo.toLowerCase() !== storedTo.toLowerCase()) ? enteredTo : null;
 
+  // Optional CC list — comma-separated. Normalize + light validation client-side;
+  // final validation happens server-side.
+  const ccRaw = ($('ccEmailsInput') && $('ccEmailsInput').value || '').trim();
+  const ccList = ccRaw
+    ? ccRaw.split(/[,;\s]+/).map(s => s.trim()).filter(s => s && s.includes('@'))
+    : [];
+  const ccJoined = ccList.join(',');
+
   // Optional attachments picked from the user's computer (single send only).
   const attachFiles = ($('attachmentInput').files && Array.from($('attachmentInput').files)) || [];
 
@@ -959,6 +969,7 @@ async function onApprove() {
   fd.append('approved_by', approver);
   if (fromMailbox)   fd.append('from_mailbox', fromMailbox);
   if (toOverride)    fd.append('to_email_override', toOverride);
+  if (ccJoined)      fd.append('cc_emails', ccJoined);
   if (editedSubject) fd.append('edited_subject', editedSubject);
   if (editedBody)    fd.append('edited_body', editedBody);
   attachFiles.forEach(f => fd.append('attachments', f, f.name));

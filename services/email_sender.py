@@ -106,6 +106,28 @@ def _attach_files(msg: EmailMessage, attachments: list[tuple[str, bytes]]) -> in
     return count
 
 
+def _clean_email_list(raw) -> list[str]:
+    """Normalize a CC/BCC input (str or list) into a list of clean addresses."""
+    if not raw:
+        return []
+    if isinstance(raw, str):
+        parts = [p.strip() for p in raw.replace(";", ",").split(",")]
+    else:
+        parts = [str(p).strip() for p in raw]
+    # de-dupe while preserving order, drop anything without an '@'
+    seen: set[str] = set()
+    out: list[str] = []
+    for p in parts:
+        if not p or "@" not in p:
+            continue
+        key = p.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(p)
+    return out
+
+
 def send_email(
     from_mailbox_email: str,
     to_email: str,
@@ -113,11 +135,14 @@ def send_email(
     body_text: str,
     sender_display_name: Optional[str] = None,
     attachments: Optional[list[tuple[str, bytes]]] = None,
+    cc_emails: Optional[list[str] | str] = None,
 ) -> SendResult:
     """
-    Send an email through the chosen Gmail mailbox, optionally with attachments.
+    Send an email through the chosen Gmail mailbox, optionally with attachments
+    and CC recipients.
 
     attachments: list of (filename, raw_bytes) tuples.
+    cc_emails:   list[str] or comma-separated str of CC addresses.
     Raises ValueError if the mailbox/recipient is missing.
     Raises smtplib errors if the SMTP server rejects the send.
     """
@@ -130,19 +155,26 @@ def send_email(
     display = sender_display_name or mb.get("display_name") or mb["email"]
     message_id = make_msgid(domain=mb["email"].split("@")[-1])
     n_attach = len(attachments or [])
+    cc_list = _clean_email_list(cc_emails)
+    # Never CC the primary recipient (or the sender) — dedupe defensively.
+    to_lower = (to_email or "").lower()
+    from_lower = mb["email"].lower()
+    cc_list = [c for c in cc_list if c.lower() not in (to_lower, from_lower)]
 
     if _is_dry_run(mb):
         fake_id = f"<dryrun-{uuid.uuid4()}@denali.local>"
         log.warning(
-            "DRY-RUN send: would have emailed %s from %s (subject=%r, attachments=%d). "
+            "DRY-RUN send: would have emailed %s (cc=%s) from %s (subject=%r, attachments=%d). "
             "Set a real app_password to actually send.",
-            to_email, mb["email"], subject[:60], n_attach,
+            to_email, cc_list, mb["email"], subject[:60], n_attach,
         )
         return SendResult(message_id=fake_id, dry_run=True, sent_via=mb["email"], attachment_count=n_attach)
 
     msg = EmailMessage()
     msg["From"]       = formataddr((display, mb["email"]))
     msg["To"]         = to_email
+    if cc_list:
+        msg["Cc"]     = ", ".join(cc_list)
     msg["Subject"]    = subject
     msg["Date"]       = formatdate(localtime=True)
     msg["Message-ID"] = message_id
@@ -153,8 +185,11 @@ def send_email(
 
     host = mb.get("smtp_host", "smtp.gmail.com")
     port = int(mb.get("smtp_port", 587))
-    log.info("Sending via %s:%d as %s -> %s (%d attachments)", host, port, mb["email"], to_email, attached)
+    log.info("Sending via %s:%d as %s -> %s (cc=%s, %d attachments)",
+             host, port, mb["email"], to_email, cc_list, attached)
 
+    # send_message() honors To/Cc/Bcc headers as envelope recipients by default,
+    # so CC'd addresses receive a real copy — no need to pass to_addrs explicitly.
     context = ssl.create_default_context()
     with smtplib.SMTP(host, port, timeout=60) as server:
         server.ehlo()
