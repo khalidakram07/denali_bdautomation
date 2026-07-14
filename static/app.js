@@ -1072,6 +1072,32 @@ async function _initDenaliApp() {
   $('rejectBtn').addEventListener('click', onReject);
   $('regenerateBtn').addEventListener('click', () => { resetDraftView(); onGenerate(); });
 
+  // Post-send navigation: don't strand the user on the "Email Approved" screen.
+  $('nextLeadBtn') && $('nextLeadBtn').addEventListener('click', async () => {
+    // Refresh from the sheet so the just-sent lead disappears and any
+    // newly-added ones show up, then pick the next opportunity.
+    await softRefreshCategory();
+    const list = (state.opps || []).filter(o => o && o.id != null);
+    if (list.length === 0) {
+      resetDraftView();
+      return;
+    }
+    const cur = String(oppCombo.getValue() || '');
+    const idx = list.findIndex(o => String(o.id) === cur);
+    const next = list[(idx + 1) % list.length] || list[0];
+    if (next) {
+      oppCombo.setValue(String(next.id));
+      loadOpportunity(next.id);
+    } else {
+      resetDraftView();
+    }
+  });
+
+  $('backToStartBtn') && $('backToStartBtn').addEventListener('click', () => {
+    resetDraftView();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  });
+
   // Attachment picker: reveal the "clear" button once a file is chosen.
   $('attachmentInput').addEventListener('change', (e) => {
     if (e.target.files && e.target.files.length) show('attachClearBtn');
