@@ -170,6 +170,24 @@ def send_email(
         )
         return SendResult(message_id=fake_id, dry_run=True, sent_via=mb["email"], attachment_count=n_attach)
 
+    # ── Signature (per-mailbox, optional) ──
+    # signature_text  : plain-text block to append after body in the text/plain part
+    # signature_html  : HTML block to append after body in the text/html part
+    # Images (e.g. company logos) should be referenced by absolute URL
+    #   (https://denali-bd.onrender.com/static/signatures/doaa-logo.png) — inline
+    #   attachments via cid: are also supported by most clients but the URL route
+    #   keeps the message small and works with all Gmail signatures.
+    sig_text = (mb.get("signature_text") or "").strip()
+    sig_html = (mb.get("signature_html") or "").strip()
+
+    body_text_final = body_text
+    if sig_text:
+        # Standard email signature separator is "\n-- \n" (dash-dash-space then LF).
+        # Clients that understand it (Thunderbird, Apple Mail) auto-collapse it in
+        # reply quoting so replies don't include the signature. Gmail ignores it,
+        # which is fine — the signature still renders.
+        body_text_final = body_text.rstrip() + "\n\n-- \n" + sig_text
+
     msg = EmailMessage()
     msg["From"]       = formataddr((display, mb["email"]))
     msg["To"]         = to_email
@@ -179,7 +197,25 @@ def send_email(
     msg["Date"]       = formatdate(localtime=True)
     msg["Message-ID"] = message_id
     msg["Reply-To"]   = mb["email"]
-    msg.set_content(body_text)
+
+    # Multipart/alternative: text first, then HTML. Clients that support HTML
+    # render the HTML version (with the logo signature); text-only clients get
+    # the plain-text version. If no HTML signature is configured we still stay
+    # single-part text (cheaper + fewer spam-filter risks).
+    msg.set_content(body_text_final)
+    if sig_html:
+        # Build a minimal HTML body: escape the plain-text body, preserve line
+        # breaks with <br>, then append the raw signature HTML.
+        import html as _html
+        html_body = (
+            "<html><body style=\"font-family:Arial,Helvetica,sans-serif;"
+            "font-size:14px;color:#111;\">"
+            + _html.escape(body_text).rstrip().replace("\n", "<br>")
+            + "<br><br>"
+            + sig_html
+            + "</body></html>"
+        )
+        msg.add_alternative(html_body, subtype="html")
 
     attached = _attach_files(msg, attachments or [])
 

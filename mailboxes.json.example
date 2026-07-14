@@ -4,13 +4,19 @@
     "display_name": "Maryam (Primary)",
     "smtp_host": "smtp.gmail.com",
     "smtp_port": 587,
-    "app_password": "REPLACE_WITH_16_CHAR_APP_PASSWORD"
+    "app_password": "REPLACE_WITH_16_CHAR_APP_PASSWORD",
+
+    "signature_text": "Maryam Denali\nDirector of Business Development\nDenali Health\nmaryam@denalihealth.com",
+    "signature_html": "<div style=\"font-family:Arial,sans-serif;font-size:13px;color:#333;line-height:1.4;\"><div style=\"font-weight:bold;\">Maryam Denali</div><div>Director of Business Development</div><div>Denali Health</div><div><a href=\"mailto:maryam@denalihealth.com\" style=\"color:#0f766e;text-decoration:none;\">maryam@denalihealth.com</a></div><div style=\"margin-top:8px;\"><img src=\"https://denali-bd.onrender.com/static/signatures/denali-logo.png\" alt=\"Denali Health\" style=\"max-height:60px;\"></div></div>"
   },
   {
     "email": "maryam.outreach@gmail.com",
     "display_name": "Maryam (Outreach)",
     "smtp_host": "smtp.gmail.com",
     "smtp_port": 587,
-    "app_password": "REPLACE_WITH_16_CHAR_APP_PASSWORD"
+    "app_password": "REPLACE_WITH_16_CHAR_APP_PASSWORD",
+
+    "signature_text": "",
+    "signature_html": ""
   }
 ]
