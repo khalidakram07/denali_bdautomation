@@ -1118,10 +1118,19 @@ async function _initDenaliApp() {
 }
 
 // Run immediately if DOM already loaded, otherwise wait for it.
-if (document.readyState === 'loading') {
-  window.addEventListener('DOMContentLoaded', _initDenaliApp);
-} else {
+// Guard against double-init: index.html has a fallback bootstrap that also
+// calls _initDenaliApp(). Without this flag, both fire and every button ends
+// up with TWO click listeners (root cause of the "prompt appears twice"
+// approve bug).
+function _initDenaliAppOnce() {
+  if (window.__denaliInited) return;
+  window.__denaliInited = true;
   _initDenaliApp();
+}
+if (document.readyState === 'loading') {
+  window.addEventListener('DOMContentLoaded', _initDenaliAppOnce);
+} else {
+  _initDenaliAppOnce();
 }
 
 
