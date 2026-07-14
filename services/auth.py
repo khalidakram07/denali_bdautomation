@@ -26,6 +26,13 @@ PUBLIC_PATHS = (
     "/favicon.ico",
 )
 
+# Prefixes that bypass auth. /static/signatures/ must be public so email
+# clients (Gmail, Outlook) can fetch signature logos from the emails we send;
+# those fetches don't carry Basic Auth headers.
+PUBLIC_PREFIXES = (
+    "/static/signatures/",
+)
+
 
 def _expected_password() -> Optional[str]:
     pw = os.getenv("APP_PASSWORD", "").strip()
@@ -36,6 +43,10 @@ def _is_public(path: str) -> bool:
     # /health and /favicon.ico always public
     if path in PUBLIC_PATHS:
         return True
+    # Public prefixes (signature logos, etc.)
+    for prefix in PUBLIC_PREFIXES:
+        if path.startswith(prefix):
+            return True
     return False
 
 
