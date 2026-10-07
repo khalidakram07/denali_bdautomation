@@ -253,14 +253,15 @@
       <!-- Draft result -->
       <div id="draftResult" class="draft-body hidden">
         <div class="draft-field">
-          <div class="draft-field-label">Subject line</div>
-          <div class="subject-display" id="subjectDisplay"></div>
-          <input class="subject-edit hidden" id="subjectEdit" type="text" />
+          <div class="draft-field-label">Subject line <span class="edit-hint">(click to edit)</span></div>
+          <input class="subject-edit" id="subjectEdit" type="text" autocomplete="off" spellcheck="true" />
+          <!-- Legacy display node kept hidden so JS references don't break -->
+          <div class="subject-display hidden" id="subjectDisplay"></div>
         </div>
         <div class="draft-field">
-          <div class="draft-field-label">Email body</div>
-          <div class="email-body-display" id="bodyDisplay"></div>
-          <textarea class="edit-area hidden" id="bodyEdit"></textarea>
+          <div class="draft-field-label">Email body <span class="edit-hint">(click to edit)</span></div>
+          <textarea class="edit-area" id="bodyEdit" spellcheck="true" rows="12"></textarea>
+          <div class="email-body-display hidden" id="bodyDisplay"></div>
         </div>
         <div class="draft-field">
           <div class="draft-field-label">Quality flags &amp; signals</div>
@@ -324,7 +325,7 @@
       </div>
       <div class="approval-actions">
         <button class="btn btn-reject"  id="rejectBtn">✕ Reject</button>
-        <button class="btn btn-edit"    id="editBtn">✏ Edit</button>
+        <button class="btn btn-edit hidden" id="editBtn" aria-hidden="true" tabindex="-1">✏ Edit</button>
         <button class="btn btn-approve" id="approveBtn">✓ Approve &amp; Send</button>
       </div>
     </div>

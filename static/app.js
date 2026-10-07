@@ -669,6 +669,8 @@ function renderDraft(d) {
   $('subjectEdit').value = d.subject_line;
   $('bodyDisplay').textContent = d.body_text;
   $('bodyEdit').value = d.body_text;
+  // Fit the textarea to the generated body so there's no scrolling-inside-scrolling.
+  requestAnimationFrame(autosizeBodyEditor);
 
   const flags = d.quality_flags || [];
   $('qFlags').innerHTML = flags.map(f => {
@@ -806,17 +808,18 @@ async function onGenerate() {
   }
 }
 
-function onToggleEdit() {
-  state.isEditing = !state.isEditing;
-  $('subjectDisplay').classList.toggle('hidden', state.isEditing);
-  $('subjectEdit').classList.toggle('hidden', !state.isEditing);
-  $('bodyDisplay').classList.toggle('hidden', state.isEditing);
-  $('bodyEdit').classList.toggle('hidden', !state.isEditing);
-  $('editBtn').textContent = state.isEditing ? '✓ Done editing' : '✏ Edit';
-  if (!state.isEditing) {
-    $('subjectDisplay').textContent = $('subjectEdit').value;
-    $('bodyDisplay').textContent = $('bodyEdit').value;
-  }
+// The Subject + Body are always-on editable fields (the old toggle is gone),
+// so this handler is a no-op kept only so legacy wiring doesn't throw.
+function onToggleEdit() { /* legacy no-op */ }
+
+// Auto-grow the body textarea to its content so the user never has to drag the
+// resize handle. Call this after setting .value and on every "input" event.
+function autosizeBodyEditor() {
+  const ta = document.getElementById('bodyEdit');
+  if (!ta) return;
+  ta.style.height = 'auto';
+  // +2px for the border, min 240 so a blank textarea isn't claustrophobic.
+  ta.style.height = Math.max(240, ta.scrollHeight + 2) + 'px';
 }
 
 // ── Send history ─────────────────────────────────
@@ -939,10 +942,34 @@ async function loadTemplates(forceRefresh = false) {
   }
 }
 
+// Who the send gets attributed to in the audit log. Picks (in order):
+//   1. the display_name of the mailbox selected in "Send from"
+//   2. the local-part of that mailbox email
+//   3. a sensible fallback
+// No popup, no prompt, no interruption to the send flow.
+function _resolveApprover() {
+  const sel = document.getElementById('mailboxSelect');
+  if (sel) {
+    const opt = sel.options[sel.selectedIndex];
+    if (opt) {
+      const label = (opt.textContent || '').trim();
+      // The option label is usually "Doaa Abasher <doaa@...>" or "Maryam".
+      // Strip the "<email>" bit if present.
+      const name = label.replace(/\s*<[^>]+>\s*$/, '').trim();
+      if (name && !/^[-(]/.test(name)) return name;
+    }
+    if (sel.value) {
+      // Fall back to the local-part of the mailbox email.
+      const local = sel.value.split('@')[0] || '';
+      if (local) return local.charAt(0).toUpperCase() + local.slice(1);
+    }
+  }
+  return 'Denali BD';
+}
+
 async function onApprove() {
   if (!state.draft) return;
-  const approver = window.prompt('Approve as (your name)?', 'Maryam');
-  if (!approver) return;
+  const approver = _resolveApprover();
   const fromMailbox = $('mailboxSelect').value || null;
   const editedSubject = $('subjectEdit').value !== state.draft.subject_line ? $('subjectEdit').value : null;
   const editedBody    = $('bodyEdit').value    !== state.draft.body_text    ? $('bodyEdit').value    : null;
@@ -1016,10 +1043,8 @@ function clearAttachment() {
 
 async function onReject() {
   if (!state.draft) return;
-  const reason = window.prompt('Reason for rejection?');
-  if (!reason) return;
-  const rejecter = window.prompt('Rejected by (your name)?', 'Maryam');
-  if (!rejecter) return;
+  const reason = window.prompt('Reason for rejection? (optional)') || 'rejected via UI';
+  const rejecter = _resolveApprover();
   try {
     await API.post(`/api/drafts/${state.draft.id}/reject`, {
       rejected_by: rejecter, rejection_reason: reason,
@@ -1067,7 +1092,15 @@ async function _initDenaliApp() {
   $('acSubmit').addEventListener('click', onSubmitContact);
   $('acCancel').addEventListener('click', onToggleAddContact);
   $('generateBtn').addEventListener('click', onGenerate);
-  $('editBtn').addEventListener('click', onToggleEdit);
+  // Edit button is hidden now (fields are always editable) but keep the listener
+  // defensively in case it ever gets re-shown by custom markup.
+  const editBtn = document.getElementById('editBtn');
+  if (editBtn) editBtn.addEventListener('click', onToggleEdit);
+
+  // Autosize the body textarea on every keystroke so it grows with the content.
+  const bodyEdit = document.getElementById('bodyEdit');
+  if (bodyEdit) bodyEdit.addEventListener('input', autosizeBodyEditor);
+
   $('approveBtn').addEventListener('click', onApprove);
   $('rejectBtn').addEventListener('click', onReject);
   $('regenerateBtn').addEventListener('click', () => { resetDraftView(); onGenerate(); });

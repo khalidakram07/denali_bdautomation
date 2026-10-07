@@ -118,10 +118,51 @@ body {
 .draft-body { padding: 20px; }
 .draft-field { margin-bottom: 14px; }
 .draft-field-label { font-size: 10px; font-weight: 600; color: var(--ink-soft); text-transform: uppercase; letter-spacing: 0.8px; font-family: 'JetBrains Mono', ui-monospace, monospace; margin-bottom: 5px; }
-.subject-display { font-size: 15px; font-weight: 600; color: var(--ink); padding: 10px 14px; background: var(--surface); border: 1px solid var(--rule); border-radius: 8px; font-family: 'Instrument Serif', Georgia, serif; }
-.email-body-display { font-size: 13.5px; line-height: 1.75; color: var(--ink-mid); padding: 16px; background: var(--surface); border: 1px solid var(--rule); border-radius: 8px; white-space: pre-wrap; }
-.edit-area { width: 100%; min-height: 220px; font-size: 13.5px; line-height: 1.75; color: var(--ink-mid); padding: 16px; background: var(--white); border: 2px solid var(--teal-mid); border-radius: 8px; font-family: 'Switzer', 'Instrument Sans', sans-serif; resize: vertical; outline: none; }
-.subject-edit { width: 100%; font-size: 15px; font-weight: 600; color: var(--ink); padding: 10px 14px; background: var(--white); border: 2px solid var(--teal-mid); border-radius: 8px; font-family: 'Instrument Serif', Georgia, serif; outline: none; }
+/* Legacy read-only display nodes, kept in the DOM for backward compat but
+   never shown now that the editable fields are always on. */
+.subject-display { font-size: 15px; font-weight: 600; color: var(--ink); padding: 10px 14px; background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; font-family: 'Instrument Serif', Georgia, serif; }
+.email-body-display { font-size: 13.5px; line-height: 1.75; color: var(--ink-mid); padding: 16px; background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; white-space: pre-wrap; }
+
+/* Hint text next to each field label letting the user know they can click. */
+.edit-hint { font-weight: 400; color: var(--ink-soft); font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 9px; text-transform: uppercase; letter-spacing: 1px; margin-left: 6px; }
+
+/* Subject = single-line editable, styled to look like a composed subject bar. */
+.subject-edit {
+  width: 100%;
+  font-size: 18px;
+  font-weight: 400;
+  color: var(--ink-strong);
+  padding: 12px 16px;
+  background: var(--white);
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  font-family: 'Instrument Serif', Georgia, serif;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+  letter-spacing: -0.005em;
+}
+.subject-edit:hover  { border-color: var(--teal-mid); }
+.subject-edit:focus  { border-color: var(--brand); box-shadow: 0 0 0 3px rgba(0, 35, 217, 0.08); background: #fff; }
+
+/* Body = autosized textarea styled like a Gmail-style composer. */
+.edit-area {
+  width: 100%;
+  min-height: 240px;
+  font-size: 14px;
+  line-height: 1.75;
+  color: var(--ink);
+  padding: 18px 20px;
+  background: var(--white);
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  font-family: 'Switzer', 'Instrument Sans', sans-serif;
+  resize: none;             /* autosized by JS */
+  outline: none;
+  overflow: hidden;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.edit-area:hover { border-color: var(--teal-mid); }
+.edit-area:focus { border-color: var(--brand); box-shadow: 0 0 0 3px rgba(0, 35, 217, 0.08); }
 .personalization-tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
 .ptag { background: var(--brand-light); border: 1px solid rgba(0, 35, 217, 0.18); color: var(--brand); border-radius: 99px; padding: 2px 10px; font-size: 11px; font-family: 'JetBrains Mono', ui-monospace, monospace; }
 .quality-flags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }

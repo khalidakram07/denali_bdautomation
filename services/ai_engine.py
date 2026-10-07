@@ -340,16 +340,46 @@ def generate_draft(
 
     flags: list[str] = []
     for sig in (result.get("personalization_signals") or []):
-        flags.append(f"\U0001F4CC {sig}")
+        flags.append(f"\U0001F4CC {_sanitize_punct(sig)}")
     for fl in (result.get("quality_flags") or []):
-        flags.append(fl)
+        flags.append(_sanitize_punct(fl))
 
     return DraftCreate(
         opportunity_id = opp["id"],
         contact_id     = contact["id"],
         sequence_step  = 1,
-        subject_line   = result["subject"],
-        body_text      = result["body"],
+        subject_line   = _sanitize_punct(result["subject"]),
+        body_text      = _sanitize_punct(result["body"]),
         prompt_version = prompt_version_used,
         quality_flags  = flags,
     )
+
+
+# ─────────────────────────────────────────────────────────────
+# Punctuation sanitiser
+# ─────────────────────────────────────────────────────────────
+#
+# Claude sometimes slips em/en dashes and smart quotes through even when the
+# prompt bans them. This is a last-mile safety net that runs on every subject,
+# body, and quality flag. Keep it dumb and deterministic.
+_PUNCT_MAP = {
+    "—": ", ",   # em dash
+    "–": "-",    # en dash
+    "−": "-",    # minus sign
+    "‘": "'",    # left single curly quote
+    "’": "'",    # right single curly quote
+    "“": '"',    # left double curly quote
+    "”": '"',    # right double curly quote
+    "…": "...",  # horizontal ellipsis
+    " ": " ",    # non-breaking space
+}
+
+def _sanitize_punct(text: str) -> str:
+    if not text:
+        return text
+    for bad, good in _PUNCT_MAP.items():
+        if bad in text:
+            text = text.replace(bad, good)
+    # Collapse the "word, ,  word" artifacts that em dash -> ", " can create.
+    text = text.replace(", , ", ", ").replace(" , ", ", ").replace(",,", ",")
+    return text
