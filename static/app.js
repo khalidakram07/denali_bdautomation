@@ -1,5 +1,5 @@
 /* ─────────────────────────────────────────────────────
-   Denali Health — BD Automation
+   Denali Health · BD Automation
    Frontend ↔ Backend wiring (vanilla JS, no framework)
    ───────────────────────────────────────────────────── */
 
@@ -56,7 +56,7 @@ function escapeHtml(s) {
 }
 
 function fmtDate(s) {
-  if (!s) return '—';
+  if (!s) return '·';
   const d = new Date(s);
   if (isNaN(d)) return s;
   return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
@@ -292,7 +292,7 @@ async function loadCategories() {
 async function loadCategoryData(forceRefresh = false) {
   if (!state.category) return;
   localStorage.setItem('denali.category', state.category);
-  oppCombo.setOptions([{ value: '', label: '— loading… —' }]);
+  oppCombo.setOptions([{ value: '', label: 'loading…' }]);
   let payload;
   try {
     const path = `/api/leads/category/${encodeURIComponent(state.category)}${forceRefresh ? '?refresh=true' : ''}`;
@@ -344,7 +344,7 @@ function renderOpportunityDropdown() {
   const opts = opps.map(o => {
     const n = o.contacts ? o.contacts.length : 0;
     const who = o.sponsor_name || '(unknown sponsor)';
-    const title = (o.trial_title && o.trial_title !== who) ? ` — ${o.trial_title}` : '';
+    const title = (o.trial_title && o.trial_title !== who) ? ` · ${o.trial_title}` : '';
     const label = `${who}${title} · ${n} contact${n === 1 ? '' : 's'}`;
     return { value: String(o.id), label: label.length > 95 ? label.slice(0, 95) + '…' : label };
   });
@@ -371,14 +371,14 @@ async function softRefreshCategory() {
     const optsNew = opps.map(o => {
       const n = o.contacts ? o.contacts.length : 0;
       const who = o.sponsor_name || '(unknown sponsor)';
-      const title = (o.trial_title && o.trial_title !== who) ? ` — ${o.trial_title}` : '';
+      const title = (o.trial_title && o.trial_title !== who) ? ` · ${o.trial_title}` : '';
       const label = `${who}${title} · ${n} contact${n === 1 ? '' : 's'}`;
       return { value: String(o.id), label: label.length > 95 ? label.slice(0, 95) + '…' : label };
     });
     oppCombo.setOptions(optsNew);
     if (optsNew.some(o => o.value === String(prev))) oppCombo.setValue(String(prev));
   } catch (err) {
-    // silent — the email already went out; this is just a UX refresh
+    // silent: the email already went out; this is just a UX refresh
     console.warn('soft refresh failed:', err);
   }
 }
@@ -494,13 +494,13 @@ function field(label, value, full = false) {
   return `
     <div class="opp-field${full ? ' full' : ''}">
       <div class="opp-field-label">${escapeHtml(label)}</div>
-      <div class="opp-field-val">${escapeHtml(value || '—')}</div>
+      <div class="opp-field-val">${escapeHtml(value || '·')}</div>
     </div>
   `;
 }
 
 function renderContact(c) {
-  // Reset Cc every time contact changes — never carry it across leads.
+  // Reset Cc every time contact changes; never carry it across leads.
   if ($('ccEmailsInput')) $('ccEmailsInput').value = '';
   if (!c) {
     $('contactBody').innerHTML = '';
@@ -515,7 +515,7 @@ function renderContact(c) {
   if (!c.email) {
     inp.style.borderColor = '#f59e0b';
     inp.style.background  = '#fffbeb';
-    inp.placeholder       = 'No email on file — type one to send';
+    inp.placeholder       = 'No email on file. Type one to send';
   } else {
     inp.style.borderColor = '';
     inp.style.background  = '';
@@ -597,7 +597,7 @@ function renderOtherContacts(others) {
           <div class="contact-mini-name">${escapeHtml((c.first_name || '') + ' ' + (c.last_name || ''))}</div>
           <div class="contact-mini-title">${escapeHtml(c.title || '')}</div>
         </div>
-        <div class="contact-mini-score">${c.contact_score ?? '—'}</div>
+        <div class="contact-mini-score">${c.contact_score ?? '·'}</div>
       </div>
     `).join('');
   el.querySelectorAll('.contact-mini').forEach(el => {
@@ -832,11 +832,11 @@ async function loadSendHistory() {
 function renderSendHistory(sends) {
   const body = $('sendHistoryBody');
   if (!sends || sends.length === 0) {
-    body.innerHTML = '<div style="padding:20px;text-align:center;color:var(--ink-soft);font-size:13px;">No emails sent yet — approve a draft with a mailbox selected to see it here.</div>';
+    body.innerHTML = '<div style="padding:20px;text-align:center;color:var(--ink-soft);font-size:13px;">No emails sent yet. Approve a draft with a mailbox selected to see it here.</div>';
     return;
   }
   body.innerHTML = sends.map(s => {
-    const t = s.sent_at ? new Date(s.sent_at).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : '—';
+    const t = s.sent_at ? new Date(s.sent_at).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : '·';
     const date = s.sent_at ? new Date(s.sent_at).toLocaleDateString([], {month:'short', day:'numeric'}) : '';
     const overrideTag = s.is_to_overridden ? '<span class="override-tag">TO OVERRIDDEN</span>' : '';
     return `
@@ -874,9 +874,9 @@ function renderSendHistory(sends) {
         <div><span class="label">From:</span> ${escapeHtml(send.from_mailbox_email || '')}</div>
         <div><span class="label">To:</span> ${escapeHtml(send.recipient_email || '')}${send.is_to_overridden ? ' <span class="override-tag">override of stored '+escapeHtml(send.contact_stored_email||'')+'</span>' : ''}</div>
         <div><span class="label">Subject:</span> ${escapeHtml(send.subject || '')}</div>
-        <div><span class="label">Sent at:</span> ${escapeHtml(send.sent_at || '—')}</div>
-        <div><span class="label">Approved by:</span> ${escapeHtml(send.approved_by || '—')} ${send.approved_at ? '· ' + escapeHtml(send.approved_at) : ''}</div>
-        <div><span class="label">Message-ID:</span> ${escapeHtml(send.message_id || '—')}</div>
+        <div><span class="label">Sent at:</span> ${escapeHtml(send.sent_at || '·')}</div>
+        <div><span class="label">Approved by:</span> ${escapeHtml(send.approved_by || '·')} ${send.approved_at ? '· ' + escapeHtml(send.approved_at) : ''}</div>
+        <div><span class="label">Message-ID:</span> ${escapeHtml(send.message_id || '·')}</div>
         <div><span class="label">Opportunity:</span> ${escapeHtml(send.opportunity_title || '')}</div>
         <div><span class="label">Contact:</span> ${escapeHtml(send.contact_name || '')} (${escapeHtml(send.contact_title || '')})</div>
         <div class="body-block">${escapeHtml(send.body || '')}</div>
@@ -948,12 +948,12 @@ async function onApprove() {
   const editedBody    = $('bodyEdit').value    !== state.draft.body_text    ? $('bodyEdit').value    : null;
 
   // Resolve the recipient. If the user changed it from the contact's stored email,
-  // pass it as an override (single send only — doesn't update the contact record).
+  // pass it as an override (single send only; doesn't update the contact record).
   const enteredTo  = $('toEmailInput').value.trim();
   const storedTo   = (state.primaryContact && state.primaryContact.email) || '';
   const toOverride = (enteredTo && enteredTo.toLowerCase() !== storedTo.toLowerCase()) ? enteredTo : null;
 
-  // Optional CC list — comma-separated. Normalize + light validation client-side;
+  // Optional CC list, comma-separated. Normalize + light validation client-side;
   // final validation happens server-side.
   const ccRaw = ($('ccEmailsInput') && $('ccEmailsInput').value || '').trim();
   const ccList = ccRaw
@@ -964,7 +964,7 @@ async function onApprove() {
   // Optional attachments picked from the user's computer (single send only).
   const attachFiles = ($('attachmentInput').files && Array.from($('attachmentInput').files)) || [];
 
-  // Build multipart form data — required so the files can ride along.
+  // Build multipart form data, required so the files can ride along.
   const fd = new FormData();
   fd.append('approved_by', approver);
   if (fromMailbox)   fd.append('from_mailbox', fromMailbox);
@@ -998,7 +998,7 @@ async function onApprove() {
         loadMetrics(); loadRecentOutreach(); loadMailboxBars(); loadTopRecipients(); loadHistoryFiltered();
       }
     } else {
-      logEntry('Draft approved (no mailbox selected — not sent)', 'sys');
+      logEntry('Draft approved (no mailbox selected, not sent)', 'sys');
     }
     // Reset the attachment picker after a successful approve/send.
     clearAttachment();
@@ -1139,9 +1139,9 @@ if (document.readyState === 'loading') {
 // filterable Send History, per-contact side panel.
 // ──────────────────────────────────────────────────────────────
 
-function _fmt(n) { return n == null ? '—' : String(n); }
+function _fmt(n) { return n == null ? '·' : String(n); }
 function _shortTime(iso) {
-  if (!iso) return '—';
+  if (!iso) return '·';
   const d = new Date(iso);
   if (isNaN(d)) return iso;
   const now = new Date();
@@ -1203,7 +1203,7 @@ async function loadRecentOutreach() {
         <div class="t">${escapeHtml(_shortTime(s.sent_at))}</div>
         <div>
           <div class="s">${escapeHtml(s.subject || '(no subject)')}</div>
-          <div class="m"><span class="clickable-name" data-email="${escapeHtml(s.recipient_email || '')}">${escapeHtml(s.contact_name || s.recipient_email || '—')}</span> · ${escapeHtml(s.sponsor_name || s.opportunity_title || '')} · ${escapeHtml(s.category || '')}</div>
+          <div class="m"><span class="clickable-name" data-email="${escapeHtml(s.recipient_email || '')}">${escapeHtml(s.contact_name || s.recipient_email || '·')}</span> · ${escapeHtml(s.sponsor_name || s.opportunity_title || '')} · ${escapeHtml(s.category || '')}</div>
         </div>
         <div class="p"><span class="meta-chip">${escapeHtml(status)}</span></div>
       `;
@@ -1283,9 +1283,9 @@ async function openContactPanel(email) {
   panel.setAttribute('aria-hidden', 'false');
   $('sideName').textContent  = email;
   $('sideTitle').textContent = '…loading…';
-  $('sideSent').textContent = '—';
-  $('sideReplied').textContent = '—';
-  $('sideCats').textContent = '—';
+  $('sideSent').textContent = '·';
+  $('sideReplied').textContent = '·';
+  $('sideCats').textContent = '·';
   $('sideTimeline').innerHTML = '';
   try {
     const data = await API.get(`/api/campaigns/contact-history?email=${encodeURIComponent(email)}`);
@@ -1392,7 +1392,7 @@ async function loadMailboxBars() {
     const max = Math.max(...rows.map(r => r.sent || 0)) || 1;
     el.innerHTML = rows.map(r => {
       const pct = Math.round(((r.sent || 0) / max) * 100);
-      const mb  = (r.mailbox || '—').split('@')[0];
+      const mb  = (r.mailbox || '·').split('@')[0];
       return '<div class="bar-row">' +
                '<div title="' + (r.mailbox || '') + '">' + mb + '</div>' +
                '<div class="bar-track"><div class="bar-fill" style="width:' + pct + '%"></div></div>' +

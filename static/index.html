@@ -3,13 +3,21 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Denali Health — BD Automation</title>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Mono:wght@400;500&family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <title>Denali Health · BD Automation</title>
+  <!-- Switzer (Fontshare) matches denali-health.com body/UI font exactly.
+       Instrument Serif (Google Fonts) stands in for Reckless Neue, the paid
+       display serif denali-health.com uses - the metrics and feel are a close
+       match. JetBrains Mono for small label text. -->
+  <link rel="preconnect" href="https://api.fontshare.com">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=switzer@300,400,500,600,700&display=swap">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500&display=swap">
   <link rel="stylesheet" href="/static/style.css">
 <style>
 .combo { position: relative; display: inline-block; min-width: 220px; }
 .combo-input { width: 100%; padding: 6px 28px 6px 10px; border: 1px solid var(--rule, #d0d5dd); border-radius: 6px; font-size: 13px; font-family: inherit; outline: none; background: #fff; box-sizing: border-box; cursor: text; }
-.combo-input:focus { border-color: #2563eb; }
+.combo-input:focus { border-color: var(--brand); box-shadow: 0 0 0 3px rgba(0, 35, 217, 0.08); }
 .combo-arrow { position: absolute; top: 50%; right: 8px; transform: translateY(-50%); width: 16px; height: 16px; display: flex; align-items: center; justify-content: center; color: #6b7280; cursor: pointer; user-select: none; pointer-events: auto; font-size: 10px; transition: transform 0.15s ease; }
 .combo.open .combo-arrow { transform: translateY(-50%) rotate(180deg); }
 .combo-panel { position: absolute; top: 100%; left: 0; right: 0; margin-top: 2px; background: #fff; border: 1px solid var(--rule, #d0d5dd); border-radius: 6px; max-height: 280px; overflow-y: auto; z-index: 100; box-shadow: 0 6px 14px rgba(0,0,0,0.10); }
@@ -21,50 +29,53 @@
 
 /* ── Phase 2: metric tiles, recent feed, filter bar, side panel ── */
 .metric-strip { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; max-width: 1100px; margin: 16px auto 0; padding: 0 24px; }
-.metric-tile  { background: #fff; border: 1px solid var(--rule, #e5e7eb); border-radius: 10px; padding: 14px 16px; }
-.m-label      { font-size: 10px; font-family: 'DM Mono', monospace; color: #6b7280; text-transform: uppercase; letter-spacing: 0.8px; }
-.m-value      { font-family: 'DM Serif Display', serif; font-size: 30px; line-height: 1.1; margin-top: 4px; }
-.m-sub        { font-size: 11px; color: #6b7280; margin-top: 4px; }
+.metric-tile  { background: #fff; border: 1px solid var(--rule); border-radius: 12px; padding: 16px 18px; transition: border-color 0.15s, box-shadow 0.15s; }
+.metric-tile:hover { border-color: var(--teal-mid); box-shadow: 0 1px 6px rgba(0, 70, 75, 0.06); }
+.m-label      { font-size: 10px; font-family: 'JetBrains Mono', ui-monospace, monospace; color: var(--ink-soft); text-transform: uppercase; letter-spacing: 1px; }
+.m-value      { font-family: 'Instrument Serif', serif; font-size: 32px; line-height: 1.1; margin-top: 6px; color: var(--ink-strong); font-weight: 400; }
+.m-sub        { font-size: 11px; color: var(--ink-soft); margin-top: 4px; }
 
 .cat-strip    { max-width: 1100px; margin: 10px auto 0; padding: 0 24px; display: flex; gap: 8px; overflow-x: auto; }
-.cat-tile     { background: #fff; border: 1px solid var(--rule, #e5e7eb); border-radius: 8px; padding: 8px 12px; min-width: 140px; flex-shrink: 0; cursor: pointer; }
-.cat-tile:hover { border-color: #2563eb; }
-.cat-tile .cn { font-size: 12px; font-weight: 600; color: #1a1f2e; }
-.cat-tile .cm { font-size: 11px; color: #6b7280; font-family: 'DM Mono', monospace; margin-top: 2px; }
+.cat-tile     { background: #fff; border: 1px solid var(--rule); border-radius: 10px; padding: 10px 14px; min-width: 140px; flex-shrink: 0; cursor: pointer; transition: border-color 0.15s, background 0.15s; }
+.cat-tile:hover { border-color: var(--teal-mid); background: var(--surface-mint); }
+.cat-tile .cn { font-size: 12px; font-weight: 600; color: var(--ink-strong); }
+.cat-tile .cm { font-size: 11px; color: var(--ink-soft); font-family: 'JetBrains Mono', ui-monospace, monospace; margin-top: 2px; }
 
 .recent-strip { max-width: 1100px; margin: 14px auto 0; padding: 0 24px; }
-.recent-card  { background: #fff; border: 1px solid var(--rule, #e5e7eb); border-radius: 10px; overflow: hidden; }
-.recent-head  { padding: 10px 16px; border-bottom: 1px solid var(--rule, #e5e7eb); background: #fcfcfa; display: flex; justify-content: space-between; align-items: center; font-size: 11px; font-family: 'DM Mono', monospace; color: #6b7280; text-transform: uppercase; letter-spacing: 0.8px; }
+.recent-card  { background: #fff; border: 1px solid var(--rule); border-radius: 12px; overflow: hidden; }
+.recent-head  { padding: 12px 18px; border-bottom: 1px solid var(--rule); background: var(--surface); display: flex; justify-content: space-between; align-items: center; font-size: 10px; font-family: 'JetBrains Mono', ui-monospace, monospace; color: var(--ink-soft); text-transform: uppercase; letter-spacing: 1px; }
 .recent-list  { max-height: 220px; overflow-y: auto; }
-.recent-row   { padding: 10px 16px; border-top: 1px solid #f3f4f6; display: grid; grid-template-columns: 84px 1fr 110px; gap: 12px; align-items: center; font-size: 13px; cursor: pointer; }
+.recent-row   { padding: 10px 18px; border-top: 1px solid var(--rule); display: grid; grid-template-columns: 84px 1fr 110px; gap: 12px; align-items: center; font-size: 13px; cursor: pointer; transition: background 0.1s; }
 .recent-row:first-child { border-top: none; }
-.recent-row:hover { background: #fafaf7; }
-.recent-row .t { font-family: 'DM Mono', monospace; font-size: 11px; color: #6b7280; }
-.recent-row .s { font-weight: 500; color: #1a1f2e; }
-.recent-row .m { font-size: 11px; color: #6b7280; margin-top: 2px; }
+.recent-row:hover { background: var(--surface-mint); }
+.recent-row .t { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 11px; color: var(--ink-soft); }
+.recent-row .s { font-weight: 500; color: var(--ink-strong); }
+.recent-row .m { font-size: 11px; color: var(--ink-soft); margin-top: 2px; }
 .recent-row .p { text-align: right; }
 
-.filter-bar   { padding: 10px 16px; border-bottom: 1px solid var(--rule, #e5e7eb); background: #fcfcfa; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-.filter-bar input, .filter-bar select { padding: 6px 10px; border: 1px solid var(--rule, #d0d5dd); border-radius: 6px; font-size: 12px; font-family: inherit; background: #fff; }
+.filter-bar   { padding: 12px 18px; border-bottom: 1px solid var(--rule); background: var(--surface); display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.filter-bar input, .filter-bar select { padding: 6px 10px; border: 1px solid var(--rule); border-radius: 8px; font-size: 12px; font-family: inherit; background: #fff; color: var(--ink); }
+.filter-bar input:focus, .filter-bar select:focus { outline: none; border-color: var(--teal-mid); }
 .filter-bar input[type=search] { min-width: 220px; flex: 1; }
 .filter-bar .spacer { flex: 1; }
-.filter-bar .count  { font-family: 'DM Mono', monospace; font-size: 11px; color: #6b7280; }
+.filter-bar .count  { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 11px; color: var(--ink-soft); }
 
-.clickable-name { color: #2563eb; cursor: pointer; }
+.clickable-name { color: var(--brand); cursor: pointer; font-weight: 500; }
 .clickable-name:hover { text-decoration: underline; }
 
-.side-panel { position: fixed; top: 0; right: 0; width: 480px; max-width: 100vw; height: 100vh; background: #fff; border-left: 1px solid var(--rule, #e5e7eb); box-shadow: -4px 0 20px rgba(0,0,0,0.08); transform: translateX(100%); transition: transform 0.2s ease; overflow-y: auto; z-index: 1000; }
+.side-panel { position: fixed; top: 0; right: 0; width: 480px; max-width: 100vw; height: 100vh; background: #fff; border-left: 1px solid var(--rule); box-shadow: -4px 0 24px rgba(0, 36, 39, 0.08); transform: translateX(100%); transition: transform 0.2s ease; overflow-y: auto; z-index: 1000; }
 .side-panel.open { transform: translateX(0); }
-.side-head  { padding: 16px 20px; border-bottom: 1px solid var(--rule, #e5e7eb); background: #fcfcfa; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; }
-.side-close { background: none; border: none; font-size: 18px; cursor: pointer; color: #6b7280; }
+.side-head  { padding: 18px 22px; border-bottom: 1px solid var(--rule); background: var(--surface); display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; }
+.side-close { background: none; border: none; font-size: 18px; cursor: pointer; color: var(--ink-soft); }
+.side-close:hover { color: var(--ink); }
 .side-body  { padding: 20px; }
 .side-stats { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin: 12px 0; }
 .side-stats .metric-tile { padding: 10px 12px; }
 .side-stats .m-value { font-size: 22px; }
 .side-timeline { border-left: 2px solid var(--rule, #e5e7eb); padding-left: 16px; margin-top: 16px; }
 .side-item  { position: relative; padding-bottom: 16px; }
-.side-item::before { content: ''; position: absolute; left: -23px; top: 6px; width: 10px; height: 10px; border-radius: 50%; background: #15803d; border: 2px solid #fff; box-shadow: 0 0 0 1px #15803d; }
-.side-time  { font-family: 'DM Mono', monospace; font-size: 11px; color: #6b7280; }
+.side-item::before { content: ''; position: absolute; left: -23px; top: 6px; width: 10px; height: 10px; border-radius: 50%; background: var(--brand); border: 2px solid #fff; box-shadow: 0 0 0 1px var(--brand); }
+.side-time  { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 11px; color: #6b7280; }
 .side-subj  { font-weight: 600; font-size: 13px; margin: 2px 0; }
 .side-trial { font-size: 12px; color: #4b5563; }
 
@@ -73,7 +84,7 @@
 .topbar-tabs { display: flex; gap: 4px; margin-left: auto; margin-right: auto; }
 .tab-btn { background: transparent; color: rgba(255,255,255,0.7); border: none; padding: 8px 14px; cursor: pointer; font-family: inherit; font-size: 13px; border-bottom: 2px solid transparent; margin-bottom: -1px; }
 .tab-btn:hover { color: #fff; }
-.tab-btn.active { color: #fff; border-bottom-color: #10b981; font-weight: 600; }
+.tab-btn.active { color: var(--mint); border-bottom-color: var(--mint); font-weight: 600; }
 
 .page { display: none; }
 .page.active { display: block; }
@@ -83,14 +94,14 @@
 .analytics-full { max-width: 1100px; margin: 14px auto 0; padding: 0 24px; }
 .bar-row { display: grid; grid-template-columns: 200px 1fr 60px; gap: 10px; align-items: center; padding: 6px 12px; font-size: 12px; }
 .bar-track { background: #f3f4f6; border-radius: 4px; height: 16px; overflow: hidden; }
-.bar-fill  { background: #15803d; height: 100%; }
-.bar-value { text-align: right; font-family: 'DM Mono', monospace; color: #4b5563; font-size: 12px; }
+.bar-fill  { background: linear-gradient(90deg, var(--teal-mid), var(--brand)); height: 100%; }
+.bar-value { text-align: right; font-family: 'JetBrains Mono', ui-monospace, monospace; color: #4b5563; font-size: 12px; }
 .recip-row { padding: 8px 14px; border-top: 1px solid #f3f4f6; display: grid; grid-template-columns: 1fr 60px; gap: 10px; align-items: center; cursor: pointer; }
 .recip-row:first-child { border-top: none; }
 .recip-row:hover { background: #fafaf7; }
 .recip-name { font-size: 13px; font-weight: 500; color: #1a1f2e; }
 .recip-sub  { font-size: 11px; color: #6b7280; margin-top: 1px; }
-.recip-count { text-align: right; font-family: 'DM Mono', monospace; font-size: 13px; color: #15803d; }
+.recip-count { text-align: right; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 13px; color: var(--brand); font-weight: 500; }
 
 </style>
 </head>
@@ -100,7 +111,7 @@
 <div class="topbar">
   <div class="topbar-brand">
     <div class="dot"></div>
-    Denali Health — BD Automation
+    Denali Health · BD Automation
   </div>
   <div class="topbar-tabs">
     <button class="tab-btn active" data-tab="outreach">📨 Outreach</button>
@@ -142,7 +153,7 @@
     <div style="display:grid;grid-template-columns:1fr 1fr 2fr 2fr;gap:10px;margin-bottom:12px;">
       <input id="acFirst" type="text" placeholder="First name *" style="padding:8px 10px;border:1px solid var(--rule);border-radius:6px;font-size:13px;">
       <input id="acLast"  type="text" placeholder="Last name"  style="padding:8px 10px;border:1px solid var(--rule);border-radius:6px;font-size:13px;">
-      <input id="acEmail" type="email" placeholder="Email (optional — can add later when sending)" style="padding:8px 10px;border:1px solid var(--rule);border-radius:6px;font-size:13px;">
+      <input id="acEmail" type="email" placeholder="Email (optional, can add later when sending)" style="padding:8px 10px;border:1px solid var(--rule);border-radius:6px;font-size:13px;">
       <input id="acTitle" type="text" placeholder="Title (e.g. VP, Site Identification)" style="padding:8px 10px;border:1px solid var(--rule);border-radius:6px;font-size:13px;">
     </div>
     <div style="display:flex;gap:10px;">
@@ -157,7 +168,7 @@
 <div id="emptyState" class="empty hidden">
   <h2>No opportunities yet</h2>
   <p>Upload a Clinwire CSV to get started, or use the file picker above.</p>
-  <div class="hint">Tip: the parser is forgiving — common Clinwire export headers all work.</div>
+  <div class="hint">Tip: the parser is forgiving. Common Clinwire export headers all work.</div>
 </div>
 
 <!-- ── MAIN SHELL ─────────────────────────────── -->
@@ -173,7 +184,7 @@
           <div class="panel-label">Live Opportunity · Clinwire Feed</div>
           <div class="panel-title">Trial opportunity</div>
         </div>
-        <div id="oppDate" style="font-size:11px;color:#9ca3af;font-family:'DM Mono',monospace;"></div>
+        <div id="oppDate" style="font-size:11px;color:#9ca3af;font-family:'JetBrains Mono',ui-monospace,monospace;"></div>
       </div>
       <div class="opp-body" id="oppBody">
         <!-- filled by app.js -->
@@ -187,7 +198,7 @@
           <div class="panel-label">Contact Intelligence · Scored</div>
           <div class="panel-title">Recommended contact</div>
         </div>
-        <div id="contactConfidence" style="font-size:11px;background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0;padding:3px 10px;border-radius:6px;font-family:'DM Mono',monospace;display:none;">HIGH CONFIDENCE</div>
+        <div id="contactConfidence" style="font-size:10px;background:var(--surface-mint);color:var(--teal-mid);border:1px solid rgba(0,136,148,0.25);padding:3px 10px;border-radius:999px;font-family:'JetBrains Mono',ui-monospace,monospace;letter-spacing:1px;display:none;">HIGH CONFIDENCE</div>
       </div>
       <div class="contact-body" id="contactBody">
         <!-- filled by app.js -->
@@ -208,7 +219,7 @@
           <div class="panel-label">AI Engine · Draft Generator</div>
           <div class="panel-title">Personalised email draft</div>
         </div>
-        <div id="draftStatus" style="font-size:11px;color:#9ca3af;font-family:'DM Mono',monospace;">Not generated</div>
+        <div id="draftStatus" style="font-size:11px;color:#9ca3af;font-family:'JetBrains Mono',ui-monospace,monospace;">Not generated</div>
       </div>
 
       <!-- Pre-generate -->
@@ -217,9 +228,9 @@
         <div style="font-size:13px;color:var(--ink-soft);margin-bottom:20px;line-height:1.6;">The system will read the trial data, score the contact, and write a personalised first-touch email.</div>
 
         <div style="display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:20px;flex-wrap:wrap;">
-          <span style="font-size:10px;font-family:'DM Mono',monospace;color:var(--ink-soft);text-transform:uppercase;letter-spacing:0.8px;">Template:</span>
+          <span style="font-size:10px;font-family:'JetBrains Mono',ui-monospace,monospace;color:var(--ink-soft);text-transform:uppercase;letter-spacing:0.8px;">Template:</span>
           <select id="templateSelect" style="font-size:13px;padding:6px 12px;border:1px solid var(--rule);border-radius:6px;background:var(--white);font-family:inherit;cursor:pointer;min-width:240px;">
-            <option value="">✨ AI only — no template (writes from Clinwire context)</option>
+            <option value="">✨ AI only (writes from Clinwire context)</option>
           </select>
           <button id="refreshTemplatesBtn" type="button" title="Refresh templates from Google Drive"
                   style="font-size:13px;padding:6px 10px;border:1px solid var(--rule);border-radius:6px;background:var(--white);cursor:pointer;font-family:inherit;">↻</button>
@@ -262,7 +273,7 @@
         <div class="status-approved">
           <h3>✓ Email Approved</h3>
           <p>Queued for send · Activity logged</p>
-          <div style="margin-top:16px;font-size:12px;color:#15803d;font-family:'DM Mono',monospace;">
+          <div style="margin-top:16px;font-size:12px;color:var(--teal-mid);font-family:'JetBrains Mono',ui-monospace,monospace;">
             Approved by: <span id="approvedBy"></span> · <span id="approvedTime"></span>
           </div>
           <div style="margin-top:20px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">
@@ -288,24 +299,24 @@
         <div class="approval-label">Your decision required</div>
         <div class="approval-sub">Nothing sends without your approval · All actions are logged</div>
         <div style="margin-top:10px;display:grid;grid-template-columns:auto 1fr;gap:6px 10px;align-items:center;max-width:480px;">
-          <span style="font-size:10px;font-family:'DM Mono',monospace;color:var(--ink-soft);text-transform:uppercase;letter-spacing:0.8px;">Send from:</span>
+          <span style="font-size:10px;font-family:'JetBrains Mono',ui-monospace,monospace;color:var(--ink-soft);text-transform:uppercase;letter-spacing:0.8px;">Send from:</span>
           <select id="mailboxSelect" style="font-size:13px;padding:6px 10px;border:1px solid var(--rule);border-radius:6px;background:var(--white);font-family:inherit;cursor:pointer;">
-            <option value="">— don't send, just approve —</option>
+            <option value="">(don't send, just approve)</option>
           </select>
 
-          <span style="font-size:10px;font-family:'DM Mono',monospace;color:var(--ink-soft);text-transform:uppercase;letter-spacing:0.8px;">Send to:</span>
-          <input id="toEmailInput" type="email" placeholder="recipient@example.com" style="font-size:13px;padding:6px 10px;border:1px solid var(--rule);border-radius:6px;background:var(--white);font-family:'DM Mono',monospace;outline:none;" />
+          <span style="font-size:10px;font-family:'JetBrains Mono',ui-monospace,monospace;color:var(--ink-soft);text-transform:uppercase;letter-spacing:0.8px;">Send to:</span>
+          <input id="toEmailInput" type="email" placeholder="recipient@example.com" style="font-size:13px;padding:6px 10px;border:1px solid var(--rule);border-radius:6px;background:var(--white);font-family:'JetBrains Mono',ui-monospace,monospace;outline:none;" />
 
-          <span style="font-size:10px;font-family:'DM Mono',monospace;color:var(--ink-soft);text-transform:uppercase;letter-spacing:0.8px;">Cc:</span>
-          <input id="ccEmailsInput" type="text" placeholder="optional — comma-separated: alice@x.com, bob@y.com" style="font-size:13px;padding:6px 10px;border:1px solid var(--rule);border-radius:6px;background:var(--white);font-family:'DM Mono',monospace;outline:none;" />
+          <span style="font-size:10px;font-family:'JetBrains Mono',ui-monospace,monospace;color:var(--ink-soft);text-transform:uppercase;letter-spacing:0.8px;">Cc:</span>
+          <input id="ccEmailsInput" type="text" placeholder="optional, comma-separated: alice@x.com, bob@y.com" style="font-size:13px;padding:6px 10px;border:1px solid var(--rule);border-radius:6px;background:var(--white);font-family:'JetBrains Mono', ui-monospace, monospace;outline:none;" />
 
-          <span style="font-size:10px;font-family:'DM Mono',monospace;color:var(--ink-soft);text-transform:uppercase;letter-spacing:0.8px;">Attach:</span>
+          <span style="font-size:10px;font-family:'JetBrains Mono',ui-monospace,monospace;color:var(--ink-soft);text-transform:uppercase;letter-spacing:0.8px;">Attach:</span>
           <div style="display:flex;align-items:center;gap:8px;">
             <input id="attachmentInput" type="file" multiple style="font-size:12px;font-family:inherit;flex:1;min-width:0;" />
             <button id="attachClearBtn" type="button" title="Remove attachment" class="hidden" style="font-size:11px;padding:4px 8px;border:1px solid var(--rule);border-radius:6px;background:var(--white);cursor:pointer;">✕ clear</button>
           </div>
 
-          <span style="font-size:10px;font-family:'DM Mono',monospace;color:var(--ink-soft);text-transform:uppercase;letter-spacing:0.8px;">Save:</span>
+          <span style="font-size:10px;font-family:'JetBrains Mono',ui-monospace,monospace;color:var(--ink-soft);text-transform:uppercase;letter-spacing:0.8px;">Save:</span>
           <label id="saveEmailWrap" style="font-size:12px;color:var(--ink-mid);display:flex;align-items:center;gap:6px;cursor:pointer;">
             <input type="checkbox" id="saveEmailToSheet" /> Save typed email back to the Sheet
           </label>
@@ -318,11 +329,11 @@
       </div>
     </div>
 
-    <!-- Activity log (hidden — kept in DOM so JS log writes don't error) -->
+    <!-- Activity log (hidden, kept in DOM so JS log writes don't error) -->
     <div class="log-panel hidden">
       <div class="log-header">
         <span class="log-title">Activity Log</span>
-        <span style="font-size:10px;color:#4b5563;font-family:'DM Mono',monospace;">Live · polling every 2s</span>
+        <span style="font-size:10px;color:#4b5563;font-family:'JetBrains Mono',ui-monospace,monospace;">Live · polling every 2s</span>
       </div>
       <div class="log-body" id="logBody"></div>
     </div>
@@ -338,10 +349,10 @@
 <div id="page-analytics" class="page">
 
   <div class="metric-strip">
-    <div class="metric-tile"><div class="m-label">Sent today</div>     <div class="m-value" id="mSentToday">—</div>     <div class="m-sub" id="mSentTodaySub">&nbsp;</div></div>
-    <div class="metric-tile"><div class="m-label">Sent this week</div> <div class="m-value" id="mSentThisWeek">—</div> <div class="m-sub" id="mSentThisWeekSub">&nbsp;</div></div>
-    <div class="metric-tile"><div class="m-label">Sent this month</div><div class="m-value" id="mSentThisMonth">—</div><div class="m-sub" id="mSentThisMonthSub">&nbsp;</div></div>
-    <div class="metric-tile"><div class="m-label">Active leads</div>   <div class="m-value" id="mActiveLeads">—</div>   <div class="m-sub" id="mActiveLeadsSub">load a category to populate</div></div>
+    <div class="metric-tile"><div class="m-label">Sent today</div>     <div class="m-value" id="mSentToday">·</div>     <div class="m-sub" id="mSentTodaySub">&nbsp;</div></div>
+    <div class="metric-tile"><div class="m-label">Sent this week</div> <div class="m-value" id="mSentThisWeek">·</div> <div class="m-sub" id="mSentThisWeekSub">&nbsp;</div></div>
+    <div class="metric-tile"><div class="m-label">Sent this month</div><div class="m-value" id="mSentThisMonth">·</div><div class="m-sub" id="mSentThisMonthSub">&nbsp;</div></div>
+    <div class="metric-tile"><div class="m-label">Active leads</div>   <div class="m-value" id="mActiveLeads">·</div>   <div class="m-sub" id="mActiveLeadsSub">load a category to populate</div></div>
   </div>
 
   <div class="cat-strip" id="catStrip"></div>
@@ -350,7 +361,7 @@
     <div class="recent-card">
       <div class="recent-head">
         <span>Recent outreach · last 5 sends</span>
-        <span id="recentEmpty" class="hidden" style="text-transform:none;">No sends yet — approve a draft to see it here.</span>
+        <span id="recentEmpty" class="hidden" style="text-transform:none;">No sends yet. Approve a draft to see it here.</span>
       </div>
       <div class="recent-list" id="recentList"></div>
     </div>
@@ -413,11 +424,11 @@
           <option value="365">Last year</option>
         </select>
         <div class="spacer"></div>
-        <span class="count" id="histCount">—</span>
+        <span class="count" id="histCount">0</span>
       </div>
       <div id="sendHistoryBody" style="max-height:360px;overflow-y:auto;">
         <div style="padding:20px;text-align:center;color:var(--ink-soft);font-size:13px;" id="sendHistoryEmpty">
-          No emails sent yet — approve a draft with a mailbox selected to see it here.
+          No emails sent yet. Approve a draft with a mailbox selected to see it here.
         </div>
       </div>
     </div>
@@ -431,16 +442,16 @@
   <div class="side-head">
     <div>
       <div class="m-label">Contact history</div>
-      <div id="sideName" style="font-family:'DM Serif Display',serif;font-size:18px;">—</div>
+      <div id="sideName" style="font-family:'Instrument Serif',serif;font-size:18px;">·</div>
       <div id="sideTitle" style="font-size:12px;color:#4b5563;margin-top:2px;">&nbsp;</div>
     </div>
     <button class="side-close" id="sideClose" title="Close">✕</button>
   </div>
   <div class="side-body">
     <div class="side-stats">
-      <div class="metric-tile"><div class="m-label">Emails sent</div><div class="m-value" id="sideSent">—</div></div>
-      <div class="metric-tile"><div class="m-label">Replies</div>    <div class="m-value" id="sideReplied">—</div></div>
-      <div class="metric-tile"><div class="m-label">Categories</div> <div class="m-value" id="sideCats">—</div></div>
+      <div class="metric-tile"><div class="m-label">Emails sent</div><div class="m-value" id="sideSent">·</div></div>
+      <div class="metric-tile"><div class="m-label">Replies</div>    <div class="m-value" id="sideReplied">·</div></div>
+      <div class="metric-tile"><div class="m-label">Categories</div> <div class="m-value" id="sideCats">·</div></div>
     </div>
     <div class="m-label" style="margin-top:14px;">Timeline</div>
     <div class="side-timeline" id="sideTimeline"></div>

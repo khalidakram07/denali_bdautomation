@@ -316,11 +316,23 @@ async def approve_draft(
             )
         except Exception as e:
             log.exception("Send failed for draft %s", draft_id)
+            # Persist from/to on the failed row so the UI shows "doaa@... -> jane@..."
+            # instead of "? -> ?" and so the activity feed error is traceable.
             with db_cursor() as cur:
                 cur.execute(
-                    "INSERT INTO email_sends (draft_id, send_status, message_id) "
-                    "VALUES (?, 'failed', ?)",
-                    (draft_id, f"error: {str(e)[:200]}"),
+                    "INSERT INTO email_sends "
+                    "(draft_id, send_status, message_id, recipient_email, "
+                    " from_mailbox_email, is_to_overridden, cc_emails, sent_at) "
+                    "VALUES (?, 'failed', ?, ?, ?, ?, ?, ?)",
+                    (
+                        draft_id,
+                        f"error: {str(e)[:200]}",
+                        final_to or None,
+                        from_mailbox or None,
+                        1 if to_email_override else 0,
+                        cc_joined,
+                        datetime.utcnow().isoformat(timespec="seconds"),
+                    ),
                 )
             log_activity(
                 "send", draft_id, "send_failed",

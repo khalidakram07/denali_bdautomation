@@ -28,11 +28,11 @@ referenced from the `signature_html` field in `MAILBOXES_JSON`.
 **How to get your current Gmail signature HTML:**
 
 1. Open Gmail → gear icon → See all settings → General tab
-2. Scroll to Signature section — copy the visible signature text/formatting
+2. Scroll to Signature section, copy the visible signature text/formatting
 3. For the exact HTML, use browser DevTools: right-click the signature preview → Inspect
    → copy the `<div>` element that contains it
 4. Paste into `signature_html` in `MAILBOXES_JSON` (escape quotes as `\"`)
 5. Upload any logo images to this folder, commit to git, redeploy
 
 **Alternative** (no code changes): send yourself a test email from Gmail,
-then view source (View → Show Original) — the signature HTML is in the body.
+then view source (View → Show Original). The signature HTML is in the body.
