@@ -183,6 +183,17 @@ body {
 .btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .btn-approve { background: var(--brand); color: #fff; box-shadow: 0 1px 2px rgba(0, 35, 217, 0.2); }
 .btn-approve:hover:not(:disabled) { background: var(--brand-dark); box-shadow: 0 2px 8px rgba(0, 35, 217, 0.25); }
+.btn-approve.is-sending { background: var(--teal-mid); cursor: wait; opacity: 0.95; }
+.btn-approve.is-sending:hover { background: var(--teal-mid); }
+.spin {
+  display: inline-block; width: 12px; height: 12px;
+  border: 2px solid rgba(255,255,255,0.35);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  vertical-align: -2px; margin-right: 6px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
 .btn-edit { background: var(--brand-light); color: var(--brand); border: 1px solid rgba(0, 35, 217, 0.2); }
 .btn-edit:hover:not(:disabled) { background: #d6dbff; }
 .btn-reject { background: var(--red-light); color: var(--red); border: 1px solid #fecaca; }

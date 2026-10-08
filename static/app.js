@@ -1002,6 +1002,18 @@ async function onApprove() {
   attachFiles.forEach(f => fd.append('attachments', f, f.name));
   if ($('saveEmailToSheet') && $('saveEmailToSheet').checked && toOverride) fd.append('save_recipient_email', '1');
 
+  // Give the user instant visual feedback — the request itself returns in
+  // ~100ms (SMTP is now background), but even that beat can feel like a stall.
+  const approveBtn = $('approveBtn');
+  const rejectBtn  = document.querySelector('#rejectBtn, .btn-reject');
+  const _origApproveHTML = approveBtn ? approveBtn.innerHTML : '';
+  if (approveBtn) {
+    approveBtn.disabled = true;
+    approveBtn.classList.add('is-sending');
+    approveBtn.innerHTML = '<span class="spin"></span> Sending email...';
+  }
+  if (rejectBtn) rejectBtn.disabled = true;
+
   try {
     const res = await API.post(`/api/drafts/${state.draft.id}/approve`, fd, true);
     const draft = res.draft || res;            // backend now returns { draft, send }
@@ -1031,6 +1043,13 @@ async function onApprove() {
     clearAttachment();
   } catch (err) {
     logEntry(`Approve failed: ${err.message}`, 'err');
+  } finally {
+    if (approveBtn) {
+      approveBtn.disabled = false;
+      approveBtn.classList.remove('is-sending');
+      approveBtn.innerHTML = _origApproveHTML;
+    }
+    if (rejectBtn) rejectBtn.disabled = false;
   }
 }
 
