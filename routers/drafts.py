@@ -244,8 +244,22 @@ async def approve_draft(
         row = cur.fetchone()
         if not row:
             raise HTTPException(404, f"Draft {draft_id} not found")
-        if row["approval_status"] != "pending":
-            raise HTTPException(409, f"Draft already {row['approval_status']}")
+
+        status = (row["approval_status"] or "").lower()
+        if status == "rejected":
+            raise HTTPException(409, "Draft was rejected; regenerate before re-approving.")
+        if status == "approved":
+            # Soft block: only reject the retry if a successful send is already
+            # on record. Otherwise this is a draft that was marked approved by
+            # the old flow before the SMTP send blew up; let the user retry.
+            cur.execute(
+                "SELECT 1 FROM email_sends "
+                "WHERE draft_id = ? AND send_status = 'sent' LIMIT 1",
+                (draft_id,),
+            )
+            if cur.fetchone():
+                raise HTTPException(409, "Draft already sent.")
+            # Otherwise fall through and let the retry happen.
         draft_data = dict(row)
 
     # 2. If a mailbox was provided, validate it exists in config
@@ -255,32 +269,43 @@ async def approve_draft(
         if not chosen_mb:
             raise HTTPException(400, f"Mailbox '{from_mailbox}' is not configured in mailboxes.json")
 
-    # 3. Mark approved (with any edits)
-    with db_cursor() as cur:
-        cur.execute(
-            """
-            UPDATE email_drafts SET
-                approval_status = 'approved',
-                approved_by     = ?,
-                approved_at     = ?,
-                edited_body     = ?,
-                subject_line    = COALESCE(?, subject_line)
-            WHERE id = ?
-            """,
-            (
-                approved_by,
-                datetime.utcnow().isoformat(timespec="seconds"),
-                edited_body,
-                edited_subject,
-                draft_id,
-            ),
+    # 3. Mark approved (with any edits).
+    #
+    # Important: we only flip approval_status to 'approved' here if the user
+    # ISN'T sending via SMTP. When a mailbox is chosen we delay the UPDATE
+    # until AFTER the send succeeds, so a failed SMTP attempt leaves the
+    # draft in 'pending' state and the user can retry. Previously the UPDATE
+    # ran first, so one failed send stuck the user on 409 Draft already
+    # approved and the Approve & Send button looked permanently broken.
+    def _mark_draft_approved():
+        with db_cursor() as cur:
+            cur.execute(
+                """
+                UPDATE email_drafts SET
+                    approval_status = 'approved',
+                    approved_by     = ?,
+                    approved_at     = ?,
+                    edited_body     = ?,
+                    subject_line    = COALESCE(?, subject_line)
+                WHERE id = ?
+                """,
+                (
+                    approved_by,
+                    datetime.utcnow().isoformat(timespec="seconds"),
+                    edited_body,
+                    edited_subject,
+                    draft_id,
+                ),
+            )
+        log_activity(
+            "draft", draft_id, "approved",
+            actor_type="user", actor_id=approved_by,
+            metadata={"edited": bool(edited_body or edited_subject)},
         )
 
-    log_activity(
-        "draft", draft_id, "approved",
-        actor_type="user", actor_id=approved_by,
-        metadata={"edited": bool(edited_body or edited_subject)},
-    )
+    if not chosen_mb:
+        # No send requested, mark approved immediately.
+        _mark_draft_approved()
 
     # 4. Send the email if a mailbox was chosen
     send_info = None
@@ -318,6 +343,9 @@ async def approve_draft(
             log.exception("Send failed for draft %s", draft_id)
             # Persist from/to on the failed row so the UI shows "doaa@... -> jane@..."
             # instead of "? -> ?" and so the activity feed error is traceable.
+            # The draft itself remains in 'pending' status (we only approve on
+            # success), so the user can click Approve & Send again after fixing
+            # the underlying cause (e.g. updating a bad mailbox password).
             with db_cursor() as cur:
                 cur.execute(
                     "INSERT INTO email_sends "
@@ -339,7 +367,10 @@ async def approve_draft(
                 actor_type="system",
                 metadata={"mailbox": from_mailbox, "error": str(e)[:200]},
             )
-            raise HTTPException(502, f"Email approved but send failed: {e}")
+            raise HTTPException(502, f"Send failed (draft stays pending, you can retry): {e}")
+
+        # Send succeeded. Now mark the draft approved and record the sent row.
+        _mark_draft_approved()
 
         with db_cursor() as cur:
             cur.execute(

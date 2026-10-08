@@ -225,13 +225,34 @@ def send_email(
              host, port, mb["email"], to_email, cc_list, attached)
 
     # send_message() honors To/Cc/Bcc headers as envelope recipients by default,
-    # so CC'd addresses receive a real copy — no need to pass to_addrs explicitly.
+    # so CC'd addresses receive a real copy. No need to pass to_addrs explicitly.
+    #
+    # Gmail occasionally drops the TCP connection mid-session (SMTPServerDisconnected,
+    # "Connection unexpectedly closed") before login. One retry with a fresh socket
+    # fixes it the vast majority of the time; a persistent failure then usually
+    # really is a bad credential or IP-reputation issue.
     context = ssl.create_default_context()
-    with smtplib.SMTP(host, port, timeout=60) as server:
-        server.ehlo()
-        server.starttls(context=context)
-        server.ehlo()
-        server.login(mb["email"], mb["app_password"])
-        server.send_message(msg)
+    last_err: Optional[Exception] = None
+    for attempt in range(1, 3):   # try up to 2 times
+        try:
+            with smtplib.SMTP(host, port, timeout=60) as server:
+                server.ehlo()
+                server.starttls(context=context)
+                server.ehlo()
+                server.login(mb["email"], mb["app_password"])
+                server.send_message(msg)
+            last_err = None
+            break
+        except (smtplib.SMTPServerDisconnected, smtplib.SMTPConnectError,
+                ConnectionResetError, TimeoutError) as e:
+            last_err = e
+            log.warning("Transient SMTP error on attempt %d for %s: %s", attempt, mb["email"], e)
+            if attempt == 2:
+                break
+            # Short back-off before retry so Gmail isn't hammered immediately.
+            import time as _time
+            _time.sleep(1.5)
+    if last_err is not None:
+        raise last_err
 
     return SendResult(message_id=message_id, dry_run=False, sent_via=mb["email"], attachment_count=attached)
