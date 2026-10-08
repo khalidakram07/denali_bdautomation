@@ -54,7 +54,7 @@ body {
 @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
 
 /* ── CONTROLS BAR (csv upload + opp selector) ──── */
-.controls { max-width: 1100px; margin: 0 auto; padding: 20px 24px 4px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.controls { max-width: 1400px; margin: 0 auto; padding: 20px 32px 4px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .control-group { display: flex; align-items: center; gap: 10px; background: var(--white); border: 1px solid var(--rule); border-radius: 10px; padding: 7px 14px; transition: border-color 0.15s, box-shadow 0.15s; }
 .control-group:focus-within { border-color: var(--teal-mid); box-shadow: 0 0 0 3px rgba(0, 136, 148, 0.08); }
 .control-group label { font-size: 10px; font-family: 'JetBrains Mono', ui-monospace, monospace; color: var(--ink-soft); text-transform: uppercase; letter-spacing: 1px; }
@@ -62,7 +62,7 @@ body {
 .control-group select { cursor: pointer; }
 
 /* ── LAYOUT ─────────────────────────────────────── */
-.shell { max-width: 1100px; margin: 0 auto; padding: 16px 24px 32px; display: grid; grid-template-columns: 340px 1fr; gap: 24px; align-items: start; }
+.shell { max-width: 1400px; margin: 0 auto; padding: 16px 32px 40px; display: grid; grid-template-columns: 360px 1fr; gap: 28px; align-items: start; }
 .left-col { display: flex; flex-direction: column; gap: 20px; }
 .right-col { display: flex; flex-direction: column; gap: 20px; }
 

@@ -28,20 +28,20 @@
 #oppCombo { min-width: 360px; }
 
 /* ── Phase 2: metric tiles, recent feed, filter bar, side panel ── */
-.metric-strip { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; max-width: 1100px; margin: 16px auto 0; padding: 0 24px; }
+.metric-strip { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; max-width: 1400px; margin: 20px auto 0; padding: 0 32px; }
 .metric-tile  { background: #fff; border: 1px solid var(--rule); border-radius: 12px; padding: 16px 18px; transition: border-color 0.15s, box-shadow 0.15s; }
 .metric-tile:hover { border-color: var(--teal-mid); box-shadow: 0 1px 6px rgba(0, 70, 75, 0.06); }
 .m-label      { font-size: 10px; font-family: 'JetBrains Mono', ui-monospace, monospace; color: var(--ink-soft); text-transform: uppercase; letter-spacing: 1px; }
 .m-value      { font-family: 'Instrument Serif', serif; font-size: 32px; line-height: 1.1; margin-top: 6px; color: var(--ink-strong); font-weight: 400; }
 .m-sub        { font-size: 11px; color: var(--ink-soft); margin-top: 4px; }
 
-.cat-strip    { max-width: 1100px; margin: 10px auto 0; padding: 0 24px; display: flex; gap: 8px; overflow-x: auto; }
+.cat-strip    { max-width: 1400px; margin: 12px auto 0; padding: 0 32px; display: flex; gap: 8px; overflow-x: auto; }
 .cat-tile     { background: #fff; border: 1px solid var(--rule); border-radius: 10px; padding: 10px 14px; min-width: 140px; flex-shrink: 0; cursor: pointer; transition: border-color 0.15s, background 0.15s; }
 .cat-tile:hover { border-color: var(--teal-mid); background: var(--surface-mint); }
 .cat-tile .cn { font-size: 12px; font-weight: 600; color: var(--ink-strong); }
 .cat-tile .cm { font-size: 11px; color: var(--ink-soft); font-family: 'JetBrains Mono', ui-monospace, monospace; margin-top: 2px; }
 
-.recent-strip { max-width: 1100px; margin: 14px auto 0; padding: 0 24px; }
+.recent-strip { max-width: 1400px; margin: 16px auto 0; padding: 0 32px; }
 .recent-card  { background: #fff; border: 1px solid var(--rule); border-radius: 12px; overflow: hidden; }
 .recent-head  { padding: 12px 18px; border-bottom: 1px solid var(--rule); background: var(--surface); display: flex; justify-content: space-between; align-items: center; font-size: 10px; font-family: 'JetBrains Mono', ui-monospace, monospace; color: var(--ink-soft); text-transform: uppercase; letter-spacing: 1px; }
 .recent-list  { max-height: 220px; overflow-y: auto; }
@@ -89,9 +89,9 @@
 .page { display: none; }
 .page.active { display: block; }
 
-.analytics-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; max-width: 1100px; margin: 14px auto 0; padding: 0 24px; }
+.analytics-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; max-width: 1400px; margin: 16px auto 0; padding: 0 32px; }
 .analytics-grid .panel { margin: 0; }
-.analytics-full { max-width: 1100px; margin: 14px auto 0; padding: 0 24px; }
+.analytics-full { max-width: 1400px; margin: 16px auto 0; padding: 0 32px; }
 .bar-row { display: grid; grid-template-columns: 200px 1fr 60px; gap: 10px; align-items: center; padding: 6px 12px; font-size: 12px; }
 .bar-track { background: #f3f4f6; border-radius: 4px; height: 16px; overflow: hidden; }
 .bar-fill  { background: linear-gradient(90deg, var(--teal-mid), var(--brand)); height: 100%; }
@@ -147,7 +147,7 @@
 </div>
 
 <!-- Manual contact entry form (hidden until + Add real contact clicked) -->
-<div id="addContactForm" class="hidden" style="max-width:1100px;margin:0 auto;padding:0 24px 16px;">
+<div id="addContactForm" class="hidden" style="max-width:1400px;margin:0 auto;padding:0 32px 16px;">
   <div class="panel" style="padding:20px;">
     <div style="font-size:13px;font-weight:600;margin-bottom:12px;color:var(--ink);">Add a real contact for this opportunity</div>
     <div style="display:grid;grid-template-columns:1fr 1fr 2fr 2fr;gap:10px;margin-bottom:12px;">
