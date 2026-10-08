@@ -21,7 +21,7 @@ import os
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, BackgroundTasks, File, Form, HTTPException, Query, UploadFile, status
 
 from database import db_cursor, log_activity
 from models import (
@@ -200,6 +200,7 @@ def get_draft(draft_id: int):
 @router.post("/{draft_id}/approve")
 async def approve_draft(
     draft_id: int,
+    background_tasks: BackgroundTasks,
     approved_by: str = Form(...),
     edited_body: Optional[str] = Form(None),
     edited_subject: Optional[str] = Form(None),
@@ -254,11 +255,11 @@ async def approve_draft(
             # the old flow before the SMTP send blew up; let the user retry.
             cur.execute(
                 "SELECT 1 FROM email_sends "
-                "WHERE draft_id = ? AND send_status = 'sent' LIMIT 1",
+                "WHERE draft_id = ? AND send_status IN ('sent','queued') LIMIT 1",
                 (draft_id,),
             )
             if cur.fetchone():
-                raise HTTPException(409, "Draft already sent.")
+                raise HTTPException(409, "Draft already sent (or send in progress).")
             # Otherwise fall through and let the retry happen.
         draft_data = dict(row)
 
@@ -303,11 +304,13 @@ async def approve_draft(
             metadata={"edited": bool(edited_body or edited_subject)},
         )
 
-    if not chosen_mb:
-        # No send requested, mark approved immediately.
-        _mark_draft_approved()
+    # 4. Mark approved IMMEDIATELY (instant UI feedback). Then, if a mailbox was
+    #    chosen, insert a 'queued' email_sends row and hand the real SMTP work to
+    #    a background task. The HTTP response returns in milliseconds instead of
+    #    waiting 3-8s for Gmail. Status flips to 'sent' or 'failed' on the
+    #    Analytics / history page once the worker finishes.
+    _mark_draft_approved()
 
-    # 4. Send the email if a mailbox was chosen
     send_info = None
     if chosen_mb:
         final_to = (to_email_override or draft_data.get("contact_email") or "").strip()
@@ -322,201 +325,70 @@ async def approve_draft(
         # Normalize CC list once so we can log + push consistently.
         from services.email_sender import _clean_email_list as _clean_cc
         cc_list_final = _clean_cc(cc_emails_raw)
-        # Belt-and-braces: don't CC the primary recipient or the sender.
         cc_list_final = [
             c for c in cc_list_final
             if c.lower() not in ((final_to or "").lower(), (from_mailbox or "").lower())
         ]
         cc_joined = ",".join(cc_list_final) if cc_list_final else None
 
-        try:
-            result = send_email(
-                from_mailbox_email = from_mailbox,
-                to_email           = final_to,
-                subject            = final_subject,
-                body_text          = final_body,
-                sender_display_name = sender_display,
-                attachments        = attachment_files or None,
-                cc_emails          = cc_list_final or None,
-            )
-        except Exception as e:
-            log.exception("Send failed for draft %s", draft_id)
-            # Persist from/to on the failed row so the UI shows "doaa@... -> jane@..."
-            # instead of "? -> ?" and so the activity feed error is traceable.
-            # The draft itself remains in 'pending' status (we only approve on
-            # success), so the user can click Approve & Send again after fixing
-            # the underlying cause (e.g. updating a bad mailbox password).
-            with db_cursor() as cur:
-                cur.execute(
-                    "INSERT INTO email_sends "
-                    "(draft_id, send_status, message_id, recipient_email, "
-                    " from_mailbox_email, is_to_overridden, cc_emails, sent_at) "
-                    "VALUES (?, 'failed', ?, ?, ?, ?, ?, ?)",
-                    (
-                        draft_id,
-                        f"error: {str(e)[:200]}",
-                        final_to or None,
-                        from_mailbox or None,
-                        1 if to_email_override else 0,
-                        cc_joined,
-                        datetime.utcnow().isoformat(timespec="seconds"),
-                    ),
-                )
-            log_activity(
-                "send", draft_id, "send_failed",
-                actor_type="system",
-                metadata={"mailbox": from_mailbox, "error": str(e)[:200]},
-            )
-            raise HTTPException(502, f"Send failed (draft stays pending, you can retry): {e}")
-
-        # Send succeeded. Now mark the draft approved and record the sent row.
-        _mark_draft_approved()
-
+        # Insert a 'queued' send row so the UI (and the retry guard) can see
+        # there's an in-flight send even before SMTP returns.
+        queued_at = datetime.utcnow().isoformat(timespec="seconds")
         with db_cursor() as cur:
             cur.execute(
                 """
                 INSERT INTO email_sends
                     (draft_id, recipient_email, from_mailbox_email, is_to_overridden,
-                     sent_at, message_id, send_status, cc_emails)
-                VALUES (?, ?, ?, ?, ?, ?, 'sent', ?)
+                     sent_at, send_status, cc_emails)
+                VALUES (?, ?, ?, ?, ?, 'queued', ?)
                 """,
                 (
-                    draft_id,
-                    final_to,
-                    result.sent_via,
+                    draft_id, final_to, from_mailbox,
                     1 if to_email_override else 0,
-                    datetime.utcnow().isoformat(timespec="seconds"),
-                    result.message_id,
-                    cc_joined,
+                    queued_at, cc_joined,
                 ),
             )
             send_id = cur.lastrowid
 
-        # Write back to the Google Sheet: mark this lead as emailed so it
-        # disappears from the dropdown on the next read, and bust the cache.
-        try:
-            from services.google_sheets import mark_lead_sent
-            from services import leads_categories as lc
-            cat = draft_data.get("category")
-            tid = draft_data.get("trial_id")
-            if cat and tid:
-                cats = lc.list_categories()
-                sheet_id = next((c["sheet_id"] for c in cats if c["name"] == cat), None)
-                if sheet_id:
-                    sent_at_iso = datetime.utcnow().isoformat(timespec="seconds")
-                    # Match by the ORIGINAL lead email (not the override) so the
-                    # right row gets the "Last Sent" stamp even when the user
-                    # overrode the To: address for a test send.
-                    lookup_email = (draft_data.get("contact_email") or final_to).strip()
-                    marked = mark_lead_sent(sheet_id, tid, lookup_email, sent_at_iso)
-                    log.info("mark_lead_sent for %s (sent to %s) in %s -> %s",
-                             lookup_email, final_to, cat, marked)
-                    if save_recipient_email and final_to and draft_data.get("contact_name"):
-                        from services.google_sheets import update_lead_field
-                        saved = update_lead_field(sheet_id, tid, draft_data["contact_name"],
-                                                  "Business Email", final_to)
-                        log.info("update_lead_field email for %s -> %s", draft_data["contact_name"], saved)
-                lc._category_data_cache.pop(cat, None)   # next read sees the new state
-        except Exception as e:
-            log.exception("mark_lead_sent failed (email still sent successfully): %s", e)
-
-        # ── Part B: push to HubSpot (best-effort, never blocks the send) ──
-        hubspot_info = {"contact_id": None, "deal_id": None, "engagement_id": None, "error": None}
-        try:
-            from services import hubspot as hs
-            contact_props = {}
-            if draft_data.get("contact_name"):
-                parts = draft_data["contact_name"].strip().split(" ", 1)
-                contact_props["firstname"] = parts[0]
-                if len(parts) > 1:
-                    contact_props["lastname"] = parts[1]
-            if draft_data.get("contact_title"):
-                contact_props["jobtitle"]         = draft_data["contact_title"]
-            if draft_data.get("sponsor_name"):
-                contact_props["site_institution"] = draft_data["sponsor_name"]
-            contact_props["preferred_mailbox"]    = result.sent_via or ""
-
-            contact_id = hs.upsert_contact(final_to, contact_props)
-
-            deal_props = {
-                "indication":            draft_data.get("category") or "",
-                "denali_category":       draft_data.get("category") or "",
-                "primary_contact_email": final_to,
-            }
-            if draft_data.get("trial_title"):
-                deal_props["dealname"] = f"{draft_data.get('sponsor_name','')} — {draft_data['trial_title']}".strip(" —")
-            deal_id = hs.upsert_deal(
-                nct_id     = draft_data.get("trial_id") or "",
-                sponsor    = draft_data.get("sponsor_name") or "",
-                properties = deal_props,
-                stage_label= "Outreach Needed",
-                contact_id = contact_id,
-            )
-
-            engagement_id = hs.log_email_engagement(
-                contact_id  = contact_id,
-                subject     = final_subject,
-                body_html   = final_body,
-                from_email  = result.sent_via or "",
-                to_email    = final_to,
-                deal_id     = deal_id,
-                cc_emails   = cc_list_final or None,
-            )
-            hubspot_info.update({
-                "contact_id":    contact_id,
-                "deal_id":       deal_id,
-                "engagement_id": engagement_id,
-            })
-            log.info("HubSpot push OK: contact=%s deal=%s engagement=%s",
-                     contact_id, deal_id, engagement_id)
-
-            # Part D — enroll into the sequence so D+2/D+4 follow-ups fire.
-            # Best-effort: failure does not block the send.
-            try:
-                enroll_res = hs.enroll_contact_in_sequence(
-                    contact_id   = contact_id,
-                    sender_email = result.sent_via,
-                )
-                hubspot_info["sequence_enrollment"] = enroll_res
-            except Exception as e:
-                hubspot_info["sequence_enrollment"] = {"ok": False, "error": str(e)[:200]}
-        except Exception as e:
-            hubspot_info["error"] = str(e)[:300]
-            log.exception("HubSpot push failed (email still sent successfully): %s", e)
-
         log_activity(
-            "send", send_id, "sent",
+            "send", send_id, "queued",
             actor_type="system",
-            metadata={
-                "mailbox":    result.sent_via,
-                "to":         final_to,
-                "cc":         cc_list_final,
-                "to_overridden": bool(to_email_override),
-                "dry_run":    result.dry_run,
-                "message_id": result.message_id,
-                "category":   draft_data.get("category"),
-                "trial":      draft_data.get("trial_title"),
-                "attachments": attachment_names,
-                "attachment_count": result.attachment_count,
-                "hubspot":    hubspot_info,
-            },
+            metadata={"mailbox": from_mailbox, "to": final_to,
+                      "to_overridden": bool(to_email_override)},
+        )
+
+        # Hand the slow work (SMTP + Sheets write-back + HubSpot push) to a
+        # background task. FastAPI runs it after the response is sent.
+        background_tasks.add_task(
+            _do_send_in_background,
+            send_id         = send_id,
+            draft_id        = draft_id,
+            from_mailbox    = from_mailbox,
+            final_to        = final_to,
+            final_subject   = final_subject,
+            final_body      = final_body,
+            sender_display  = sender_display,
+            attachment_files= attachment_files,
+            attachment_names= attachment_names,
+            cc_list_final   = cc_list_final,
+            cc_joined       = cc_joined,
+            to_email_override = to_email_override,
+            draft_data      = draft_data,
         )
 
         send_info = {
             "send_id":    send_id,
-            "message_id": result.message_id,
-            "sent_via":   result.sent_via,
-            "dry_run":    result.dry_run,
+            "status":     "queued",
+            "sent_via":   from_mailbox,
             "to":         final_to,
             "cc":         cc_list_final,
             "to_overridden": bool(to_email_override),
             "attachment": attachment_label,
             "attachment_names": attachment_names,
-            "attachment_count": result.attachment_count,
-            "hubspot":    hubspot_info,
+            "attachment_count": len(attachment_files),
         }
 
-    # 5. Return the updated draft + send info
+    # 5. Return the updated draft + send info (immediately)
     with db_cursor() as cur:
         cur.execute("SELECT * FROM email_drafts WHERE id = ?", (draft_id,))
         new_row = cur.fetchone()
@@ -525,6 +397,170 @@ async def approve_draft(
         "draft": _row_to_draft(new_row).model_dump(mode="json"),
         "send":  send_info,
     }
+
+
+# ─────────────────────────────────────────────────────────────
+# Background worker: actual SMTP + Sheets + HubSpot
+# ─────────────────────────────────────────────────────────────
+
+def _do_send_in_background(
+    send_id: int,
+    draft_id: int,
+    from_mailbox: str,
+    final_to: str,
+    final_subject: str,
+    final_body: str,
+    sender_display: str,
+    attachment_files: list,
+    attachment_names: list,
+    cc_list_final: list,
+    cc_joined: Optional[str],
+    to_email_override: Optional[str],
+    draft_data: dict,
+):
+    """
+    Runs after the HTTP response is returned. Does the SMTP send and the
+    best-effort Sheets + HubSpot pushes, then updates the email_sends row
+    from 'queued' -> 'sent' or 'failed'. Never raises (errors go to the DB).
+    """
+    try:
+        result = send_email(
+            from_mailbox_email = from_mailbox,
+            to_email           = final_to,
+            subject            = final_subject,
+            body_text          = final_body,
+            sender_display_name = sender_display,
+            attachments        = attachment_files or None,
+            cc_emails          = cc_list_final or None,
+        )
+    except Exception as e:
+        log.exception("Background send failed for draft %s (send_id=%s)", draft_id, send_id)
+        try:
+            with db_cursor() as cur:
+                cur.execute(
+                    "UPDATE email_sends SET send_status='failed', message_id=?, "
+                    "sent_at=? WHERE id=?",
+                    (f"error: {str(e)[:200]}",
+                     datetime.utcnow().isoformat(timespec="seconds"),
+                     send_id),
+                )
+            log_activity(
+                "send", send_id, "send_failed",
+                actor_type="system",
+                metadata={"mailbox": from_mailbox, "error": str(e)[:200]},
+            )
+        except Exception:
+            log.exception("Could not even record the failure for send_id=%s", send_id)
+        return
+
+    # Success: flip the row from 'queued' -> 'sent' and attach the real
+    # message-id / mailbox used.
+    try:
+        with db_cursor() as cur:
+            cur.execute(
+                "UPDATE email_sends SET send_status='sent', message_id=?, "
+                "from_mailbox_email=?, sent_at=? WHERE id=?",
+                (result.message_id, result.sent_via,
+                 datetime.utcnow().isoformat(timespec="seconds"), send_id),
+            )
+    except Exception:
+        log.exception("Could not update send row to 'sent' for send_id=%s", send_id)
+
+    # Sheets write-back (best-effort)
+    try:
+        from services.google_sheets import mark_lead_sent
+        from services import leads_categories as lc
+        cat = draft_data.get("category")
+        tid = draft_data.get("trial_id")
+        if cat and tid:
+            cats = lc.list_categories()
+            sheet_id = next((c["sheet_id"] for c in cats if c["name"] == cat), None)
+            if sheet_id:
+                sent_at_iso = datetime.utcnow().isoformat(timespec="seconds")
+                lookup_email = (draft_data.get("contact_email") or final_to).strip()
+                marked = mark_lead_sent(sheet_id, tid, lookup_email, sent_at_iso)
+                log.info("mark_lead_sent for %s (sent to %s) in %s -> %s",
+                         lookup_email, final_to, cat, marked)
+            lc._category_data_cache.pop(cat, None)
+    except Exception as e:
+        log.exception("mark_lead_sent failed (email still sent): %s", e)
+
+    # HubSpot push (best-effort)
+    hubspot_info = {"contact_id": None, "deal_id": None, "engagement_id": None, "error": None}
+    try:
+        from services import hubspot as hs
+        contact_props = {}
+        if draft_data.get("contact_name"):
+            parts = draft_data["contact_name"].strip().split(" ", 1)
+            contact_props["firstname"] = parts[0]
+            if len(parts) > 1:
+                contact_props["lastname"] = parts[1]
+        if draft_data.get("contact_title"):
+            contact_props["jobtitle"]         = draft_data["contact_title"]
+        if draft_data.get("sponsor_name"):
+            contact_props["site_institution"] = draft_data["sponsor_name"]
+        contact_props["preferred_mailbox"]    = result.sent_via or ""
+
+        contact_id = hs.upsert_contact(final_to, contact_props)
+
+        deal_props = {
+            "indication":            draft_data.get("category") or "",
+            "denali_category":       draft_data.get("category") or "",
+            "primary_contact_email": final_to,
+        }
+        if draft_data.get("trial_title"):
+            deal_props["dealname"] = f"{draft_data.get('sponsor_name','')}, {draft_data['trial_title']}".strip(", ")
+        deal_id = hs.upsert_deal(
+            nct_id     = draft_data.get("trial_id") or "",
+            sponsor    = draft_data.get("sponsor_name") or "",
+            properties = deal_props,
+            stage_label= "Outreach Needed",
+            contact_id = contact_id,
+        )
+
+        engagement_id = hs.log_email_engagement(
+            contact_id = contact_id,
+            subject    = final_subject,
+            body_html  = final_body,
+            from_email = result.sent_via or "",
+            to_email   = final_to,
+            deal_id    = deal_id,
+            cc_emails  = cc_list_final or None,
+        )
+        hubspot_info.update({
+            "contact_id":    contact_id,
+            "deal_id":       deal_id,
+            "engagement_id": engagement_id,
+        })
+        try:
+            enroll_res = hs.enroll_contact_in_sequence(
+                contact_id   = contact_id,
+                sender_email = result.sent_via,
+            )
+            hubspot_info["sequence_enrollment"] = enroll_res
+        except Exception as e:
+            hubspot_info["sequence_enrollment"] = {"ok": False, "error": str(e)[:200]}
+    except Exception as e:
+        hubspot_info["error"] = str(e)[:300]
+        log.exception("HubSpot push failed (email still sent): %s", e)
+
+    log_activity(
+        "send", send_id, "sent",
+        actor_type="system",
+        metadata={
+            "mailbox":    result.sent_via,
+            "to":         final_to,
+            "cc":         cc_list_final,
+            "to_overridden": bool(to_email_override),
+            "dry_run":    result.dry_run,
+            "message_id": result.message_id,
+            "category":   draft_data.get("category"),
+            "trial":      draft_data.get("trial_title"),
+            "attachments": attachment_names,
+            "attachment_count": result.attachment_count,
+            "hubspot":    hubspot_info,
+        },
+    )
 
 
 # ─────────────────────────────────────────────────────────────
